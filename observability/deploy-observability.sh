@@ -201,7 +201,7 @@ else
     info "Paso 3: Instalando dependencias (dnf)..."
     pct_exec dnf makecache -q
     pct_exec dnf install -y -q \
-        curl wget gnupg2 \
+        tar curl wget gnupg2 \
         libcap which
     ok "Dependencias instaladas"
 
@@ -221,8 +221,6 @@ else
         cp prometheus-${PROMETHEUS_VERSION}.linux-amd64/prometheus /usr/local/bin/
         cp prometheus-${PROMETHEUS_VERSION}.linux-amd64/promtool /usr/local/bin/
         mkdir -p /etc/prometheus /var/lib/prometheus
-        cp -r prometheus-${PROMETHEUS_VERSION}.linux-amd64/consoles /etc/prometheus
-        cp -r prometheus-${PROMETHEUS_VERSION}.linux-amd64/console_libraries /etc/prometheus
         rm -rf prometheus-${PROMETHEUS_VERSION}.linux-amd64*
         chown -R prometheus:prometheus /etc/prometheus /var/lib/prometheus
     "
