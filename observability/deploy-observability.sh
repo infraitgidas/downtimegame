@@ -37,8 +37,8 @@ CT_HOSTNAME="sg-monitoring"
 CT_IP="192.168.1.205/24"
 CT_GW="192.168.1.1"
 # Template de Rocky Linux 10 en Proxmox (mismo que servicios de color).
-# Verificar con: pveam available | grep rockylinux-10-defaults
-CT_OS="rockylinux-10-defaults-20251001.tar.xz"
+# Nombre exacto verificado: pveam list local | grep rockylinux-10
+CT_OS="rockylinux-10-default_20251001_amd64.tar.xz"
 # Storage de templates (donde está el template descargado con pveam)
 CT_TEMPLATE_STORAGE="local"
 # Storage para el rootfs del CT (local-lvm es el default de Proxmox).
