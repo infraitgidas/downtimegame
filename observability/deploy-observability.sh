@@ -39,7 +39,11 @@ CT_GW="192.168.1.1"
 # Template de Rocky Linux 10 en Proxmox (mismo que servicios de color).
 # Verificar con: pveam available | grep rockylinux-10-defaults
 CT_OS="rockylinux-10-defaults-20251001.tar.xz"
-CT_STORAGE="local"
+# Storage de templates (donde está el template descargado con pveam)
+CT_TEMPLATE_STORAGE="local"
+# Storage para el rootfs del CT (local-lvm es el default de Proxmox).
+# Verificar con: pct storage | grep -E "local|lvm|zfs"
+CT_ROOTFS_STORAGE="${CT_ROOTFS_STORAGE:-local-lvm}"
 CT_CORES=1
 CT_MEMORY=1024
 CT_SWAP=256
@@ -153,14 +157,14 @@ else
         ok "CT ${CT_ID} listo (${CT_STATUS})"
     else
         info "Creando nuevo CT ${CT_ID}..."
-        ssh_proxmox "pct create ${CT_ID} ${CT_STORAGE}:vztmpl/${CT_OS} \
+        ssh_proxmox "pct create ${CT_ID} ${CT_TEMPLATE_STORAGE}:vztmpl/${CT_OS} \
             --hostname ${CT_HOSTNAME} \
             --net0 name=eth0,bridge=vmbr0,ip=${CT_IP},gw=${CT_GW} \
             --cores ${CT_CORES} \
             --memory ${CT_MEMORY} \
             --swap ${CT_SWAP} \
-            --storage ${CT_STORAGE} \
-            --rootfs ${CT_STORAGE}:${CT_DISK} \
+            --storage ${CT_ROOTFS_STORAGE} \
+            --rootfs ${CT_ROOTFS_STORAGE}:${CT_DISK} \
             --unprivileged 1 \
             --features keyctl=1,nesting=1 \
             --start 1" || {
