@@ -19,7 +19,9 @@ interface IncidentAlarmProps {
   elapsed: number | null;
   serviceName: string;
   serviceColor: string;
-  onDismiss?: () => void;
+  hintsRevealed?: number;
+  onAbandon?: () => void;
+  abandoning?: boolean;
 }
 
 const SEVERITY_COLORS: Record<string, string> = {
@@ -35,6 +37,9 @@ function IncidentAlarm({
   elapsed,
   serviceName,
   serviceColor,
+  hintsRevealed = 99,
+  onAbandon,
+  abandoning = false,
 }: IncidentAlarmProps) {
   const [flash, setFlash] = useState(false);
 
@@ -53,6 +58,7 @@ function IncidentAlarm({
     ? ((scenario.time_limit - remaining) / scenario.time_limit) * 100
     : 0;
   const isUrgent = remaining != null && remaining <= 30;
+  const shownHints = scenario.hints.slice(0, hintsRevealed);
 
   return (
     <div
@@ -120,17 +126,19 @@ function IncidentAlarm({
       {/* Timer */}
       {remaining != null && (
         <div style={styles.timerSection}>
-          <div style={styles.timerRow}>
-            <span style={styles.timerLabel}>Tiempo restante</span>
-            <span
-              style={{
-                ...styles.timerValue,
-                color: isUrgent ? "#FF4444" : severityColor,
-                animation: isUrgent && flash ? "none" : undefined,
-              }}
-            >
-              {formatTime(remaining)}
-            </span>
+          {/* Big DOWNTIME countdown */}
+          <div style={styles.downtimeLabel}>DOWNTIME</div>
+          <div
+            style={{
+              ...styles.downtimeValue,
+              color: isUrgent ? "#FF4444" : severityColor,
+              textShadow: isUrgent
+                ? "0 0 40px #FF4444, 0 0 80px #FF444488"
+                : `0 0 40px ${severityColor}, 0 0 80px ${severityColor}44`,
+              animation: isUrgent ? "pulse-red 0.5s infinite" : "none",
+            }}
+          >
+            {formatTime(remaining)}
           </div>
 
           {/* Progress bar */}
@@ -151,19 +159,26 @@ function IncidentAlarm({
 
           {elapsed != null && (
             <div style={styles.elapsed}>
-              Tiempo transcurrido: {formatTime(elapsed)}
+              Transcurrido: {formatTime(elapsed)}
             </div>
           )}
 
-          {/* Hints */}
-          {scenario.hints.length > 0 && (
+          {/* Progressive Hints */}
+          {scenario.hints.length > 0 && shownHints.length > 0 && (
             <div style={styles.hints}>
-              <div style={styles.hintsLabel}>💡 Pistas</div>
-              {scenario.hints.map((h, i) => (
+              <div style={styles.hintsLabel}>
+                💡 Pistas {shownHints.length < scenario.hints.length && `(${shownHints.length}/${scenario.hints.length})`}
+              </div>
+              {shownHints.map((h, i) => (
                 <div key={i} style={styles.hintItem}>
-                  {i + 1}. {h}
+                  <span style={styles.hintNumber}>{i + 1}.</span> {h}
                 </div>
               ))}
+              {shownHints.length < scenario.hints.length && (
+                <div style={styles.nextHint}>
+                  Próxima pista en {60 - ((elapsed ?? 0) % 60)}s
+                </div>
+              )}
             </div>
           )}
 
@@ -172,8 +187,28 @@ function IncidentAlarm({
               ⚠️ ¡TIEMPO CRÍTICO! ⚠️
             </div>
           )}
+
+          {/* Abandon button */}
+          {onAbandon && (
+            <button
+              style={styles.abandonBtn}
+              onClick={onAbandon}
+              disabled={abandoning}
+            >
+              {abandoning ? "⚡ ABANDONANDO..." : "⏹ ABANDONAR — VER SOLUCIÓN"}
+            </button>
+          )}
         </div>
       )}
+
+      {/* Branding */}
+      <div style={styles.brandCorner}>
+        <img
+          src="/assets/logo_infra_blanco.png"
+          alt="INFRA IT"
+          style={styles.brandCornerLogo}
+        />
+      </div>
     </div>
   );
 }
@@ -205,7 +240,7 @@ const styles: Record<string, React.CSSProperties | any> = {
     display: "flex",
     alignItems: "center",
     gap: "1rem",
-    marginBottom: "1.5rem",
+    marginBottom: "1rem",
   },
   siren: {
     fontSize: "2rem",
@@ -222,7 +257,7 @@ const styles: Record<string, React.CSSProperties | any> = {
     display: "flex",
     alignItems: "center",
     gap: "1rem",
-    marginBottom: "1rem",
+    marginBottom: "0.75rem",
     flexWrap: "wrap",
     justifyContent: "center",
   },
@@ -255,13 +290,13 @@ const styles: Record<string, React.CSSProperties | any> = {
   },
   scenarioInfo: {
     textAlign: "center",
-    marginBottom: "1.5rem",
+    marginBottom: "1rem",
   },
   scenarioName: {
     fontSize: "1.2rem",
     color: "rgba(255,255,255,0.8)",
     fontWeight: 700,
-    marginBottom: "0.5rem",
+    marginBottom: "0.3rem",
   },
   scenarioDesc: {
     fontSize: "0.9rem",
@@ -271,28 +306,31 @@ const styles: Record<string, React.CSSProperties | any> = {
   },
   timerSection: {
     width: "100%",
-    maxWidth: "500px",
-  },
-  timerRow: {
+    maxWidth: "600px",
     display: "flex",
-    justifyContent: "space-between",
+    flexDirection: "column",
     alignItems: "center",
-    marginBottom: "0.5rem",
   },
-  timerLabel: {
-    fontSize: "0.9rem",
-    color: "rgba(255,255,255,0.6)",
+  downtimeLabel: {
+    fontSize: "1rem",
+    color: "rgba(255,255,255,0.4)",
+    letterSpacing: "0.5rem",
     textTransform: "uppercase",
-    letterSpacing: "0.1rem",
+    marginBottom: "0.25rem",
+    fontWeight: 300,
   },
-  timerValue: {
-    fontSize: "3rem",
+  downtimeValue: {
+    fontSize: "5rem",
     fontWeight: 900,
     fontFamily: "'Courier New', Courier, monospace",
-    letterSpacing: "0.2rem",
+    letterSpacing: "0.3rem",
+    lineHeight: 1.1,
+    marginBottom: "0.75rem",
+    transition: "all 0.3s ease",
   },
   progressTrack: {
     width: "100%",
+    maxWidth: "500px",
     height: "8px",
     background: "rgba(255,255,255,0.1)",
     borderRadius: "4px",
@@ -309,9 +347,12 @@ const styles: Record<string, React.CSSProperties | any> = {
     color: "rgba(255,255,255,0.4)",
     textAlign: "center",
     marginBottom: "0.75rem",
+    letterSpacing: "0.1rem",
   },
   hints: {
-    marginTop: "1rem",
+    width: "100%",
+    maxWidth: "500px",
+    marginTop: "0.75rem",
     textAlign: "left",
     background: "rgba(0,0,0,0.3)",
     borderRadius: "6px",
@@ -322,21 +363,60 @@ const styles: Record<string, React.CSSProperties | any> = {
     color: "#FFD700",
     marginBottom: "0.5rem",
     fontWeight: 700,
+    letterSpacing: "0.1rem",
   },
   hintItem: {
     fontSize: "0.8rem",
     color: "rgba(255,255,255,0.7)",
-    marginBottom: "0.25rem",
+    marginBottom: "0.35rem",
     lineHeight: 1.4,
   },
+  hintNumber: {
+    color: "#FFD700",
+    fontWeight: 700,
+  },
+  nextHint: {
+    fontSize: "0.7rem",
+    color: "rgba(255,215,0,0.5)",
+    marginTop: "0.5rem",
+    textAlign: "center",
+    fontStyle: "italic",
+  },
   urgentWarning: {
-    marginTop: "1rem",
+    marginTop: "0.75rem",
     fontSize: "1.2rem",
     fontWeight: 900,
     color: "#FF4444",
     textAlign: "center",
     animation: "pulse-red 0.5s infinite",
     letterSpacing: "0.2rem",
+  },
+  abandonBtn: {
+    marginTop: "1.25rem",
+    padding: "0.8rem 2rem",
+    background: "rgba(255,68,68,0.15)",
+    border: "2px solid #FF4444",
+    borderRadius: "6px",
+    color: "#FF4444",
+    fontFamily: "'Courier New', Courier, monospace",
+    fontSize: "1rem",
+    fontWeight: 700,
+    letterSpacing: "0.1rem",
+    cursor: "pointer",
+    transition: "all 0.2s ease",
+    textTransform: "uppercase",
+  },
+  brandCorner: {
+    position: "fixed",
+    bottom: "12px",
+    right: "16px",
+    opacity: 0.15,
+    pointerEvents: "none",
+    zIndex: 1001,
+  },
+  brandCornerLogo: {
+    height: "24px",
+    width: "auto",
   },
 };
 

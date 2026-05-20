@@ -22,6 +22,7 @@ type Engine struct {
 	executor       Executor
 	serviceStatus  map[string]*ServiceStatus // serviceID -> current status
 	activeGames    map[string]*GameInstance  // gameID -> game instance
+	demo           demoState                 // demo mode state
 }
 
 // NewEngine creates a new game engine with the given store and hub.
@@ -72,6 +73,153 @@ func (e *Engine) GetServiceStatuses() []ServiceStatus {
 		statuses = append(statuses, *s)
 	}
 	return statuses
+}
+
+// Demo mode — automatic game loop for fair attractor.
+
+type demoState struct {
+	Running   bool   `json:"running"`
+	GameID    string `json:"game_id,omitempty"`
+	Scenario  string `json:"scenario,omitempty"`
+	Round     int    `json:"round"`
+	StartedAt string `json:"started_at,omitempty"`
+}
+
+func (e *Engine) demoState() demoState {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.demoStateLocked()
+}
+
+func (e *Engine) demoStateLocked() demoState {
+	s := e.demo
+	if !s.Running {
+		return demoState{Running: false, Round: s.Round}
+	}
+	return s
+}
+
+// StartDemoLoop begins the automatic demo game cycle in a background goroutine.
+func (e *Engine) StartDemoLoop() {
+	e.mu.Lock()
+	if e.demo.Running {
+		e.mu.Unlock()
+		return
+	}
+	e.demo = demoState{Running: true, Round: 0}
+	e.mu.Unlock()
+
+	go e.demoLoop()
+	log.Println("Demo: loop started")
+}
+
+// StopDemoLoop terminates the demo loop.
+func (e *Engine) StopDemoLoop() {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if !e.demo.Running {
+		return
+	}
+
+	// Abort any active demo game
+	for gameID, inst := range e.activeGames {
+		if inst.Game.PlayerName == "__DEMO__" {
+			// Restore service
+			if e.serviceStatus[inst.Scenario.TargetServiceID] != nil {
+				e.serviceStatus[inst.Scenario.TargetServiceID].Online = true
+				e.serviceStatus[inst.Scenario.TargetServiceID].Incident = false
+			}
+			close(inst.TimerDone)
+			delete(e.activeGames, gameID)
+		}
+	}
+
+	e.demo.Running = false
+	log.Println("Demo: loop stopped")
+}
+
+// IsDemoRunning returns whether the demo loop is active.
+func (e *Engine) IsDemoRunning() bool {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.demo.Running
+}
+
+// DemoInfo returns current demo state info.
+func (e *Engine) DemoInfo() demoState {
+	return e.demoState()
+}
+
+// demoLoop runs the automatic game cycle.
+// It creates a game, starts it, waits 20-30 seconds, then resolves it, and repeats.
+func (e *Engine) demoLoop() {
+	for {
+		e.mu.RLock()
+		running := e.demo.Running
+		e.mu.RUnlock()
+		if !running {
+			return
+		}
+
+		// AdminReset first to clear any stale state
+		_ = e.AdminReset()
+
+		e.mu.Lock()
+		e.demo.Round++
+		round := e.demo.Round
+		e.mu.Unlock()
+
+		log.Printf("Demo: round %d starting", round)
+
+		// 1. Create demo game
+		game, err := e.CreateGame("__DEMO__")
+		if err != nil {
+			log.Printf("Demo: create game error: %v", err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		e.mu.Lock()
+		e.demo.GameID = game.ID
+		e.mu.Unlock()
+
+		// 2. Wait 3-5 seconds before starting (let the dashboard see the pending game)
+		time.Sleep(time.Duration(3+rand.Intn(3)) * time.Second)
+
+		// 3. Start the game
+		inst, err := e.StartGame(game.ID, "")
+		if err != nil {
+			log.Printf("Demo: start game error: %v", err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		e.mu.Lock()
+		e.demo.Scenario = inst.Scenario.Name
+		e.mu.Unlock()
+
+		log.Printf("Demo: round %d — scenario: %s", round, inst.Scenario.Name)
+
+		// 4. Let the alarm run for 20-30 seconds (enough for the dashboard to show it)
+		alarmDuration := time.Duration(20+rand.Intn(11)) * time.Second
+		time.Sleep(alarmDuration)
+
+		// 5. Resolve the incident
+		_, err = e.ResolveIncident(game.ID)
+		if err != nil {
+			log.Printf("Demo: resolve error: %v", err)
+
+			// Try to abandon if resolve fails (e.g., already timed out)
+			if abandonErr := e.AbandonGame(game.ID); abandonErr != nil {
+				log.Printf("Demo: abandon error after resolve failure: %v", abandonErr)
+			}
+		}
+
+		log.Printf("Demo: round %d completed", round)
+
+		// 6. Wait 5-8 seconds before next round
+		time.Sleep(time.Duration(5+rand.Intn(4)) * time.Second)
+	}
 }
 
 // GetServiceStatus returns the status of a single service.
@@ -299,17 +447,18 @@ func (e *Engine) ResolveIncident(gameID string) (*store.Game, error) {
 
 	// Broadcast events
 	e.broadcastEvent(EventIncidentResolved, map[string]any{
-		"game":          inst.Game,
-		"incident":      inst.Incident,
-		"scenario":      inst.Scenario,
-		"score":         score,
+		"game":            inst.Game,
+		"incident":        inst.Incident,
+		"scenario":        inst.Scenario,
+		"score":           score,
 		"elapsed_seconds": elapsed,
 	})
 
 	e.broadcastEvent(EventGameCompleted, map[string]any{
-		"game":   inst.Game,
-		"score":  score,
-		"player": inst.Game.PlayerName,
+		"game":        inst.Game,
+		"scenario_id": inst.Scenario.ID,
+		"score":       score,
+		"player":      inst.Game.PlayerName,
 	})
 
 	e.broadcastEvent(EventServiceStatus, map[string]any{
@@ -348,7 +497,8 @@ func (e *Engine) AbandonGame(gameID string) error {
 	delete(e.activeGames, gameID)
 
 	e.broadcastEvent(EventGameAbandoned, map[string]any{
-		"game": inst.Game,
+		"game":        inst.Game,
+		"scenario_id": inst.Scenario.ID,
 	})
 
 	log.Printf("Game abandoned: %s", gameID)
@@ -422,7 +572,8 @@ func (e *Engine) handleTimeout(gameID string) {
 	delete(e.activeGames, gameID)
 
 	e.broadcastEvent(EventGameTimeout, map[string]any{
-		"game": inst.Game,
+		"game":        inst.Game,
+		"scenario_id": inst.Scenario.ID,
 	})
 
 	log.Printf("Game timed out: %s (limit: %ds)", gameID, inst.Scenario.TimeLimit)

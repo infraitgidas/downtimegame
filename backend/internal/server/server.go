@@ -72,6 +72,11 @@ func New(gameHub *hub.Hub, gameEngine *game.Engine, dataStore *store.Store) *Ser
 
 		// Admin operations
 		r.Post("/admin/reset", s.handleAdminReset)
+
+		// Demo mode (fair attractor)
+		r.Post("/admin/demo", s.handleDemoStart)
+		r.Post("/admin/demo/stop", s.handleDemoStop)
+		r.Get("/admin/demo", s.handleDemoStatus)
 	})
 
 	// Register WebSocket message handlers (admin commands)
@@ -322,11 +327,23 @@ func (s *Server) handleDeleteGame(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleGameSolution(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
+
+	// First try active game (in-memory)
 	scenario := s.Engine.GetScenarioForGame(id)
 	if scenario == nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "no active game or scenario not found"})
-		return
+		// Fallback: look up the last incident from the store
+		incident, err := s.Store.GetLatestIncidentForGame(id)
+		if err != nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "no incidents found for this game"})
+			return
+		}
+		scenario = game.GetScenarioByID(incident.ScenarioID)
+		if scenario == nil {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "scenario not found"})
+			return
+		}
 	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"scenario_id":  scenario.ID,
 		"name":         scenario.Name,
@@ -348,6 +365,35 @@ func (s *Server) handleAdminReset(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":   "reset_completed",
 		"services": s.Engine.GetServiceStatuses(),
+	})
+}
+
+// ── Demo Mode ────────────────────────────────────────────────────────────────
+// POST /api/admin/demo — Starts an automatic game loop for fair attractor mode.
+// POST /api/admin/demo/stop — Stops the demo loop.
+
+func (s *Server) handleDemoStart(w http.ResponseWriter, r *http.Request) {
+	if s.Engine.IsDemoRunning() {
+		writeJSON(w, http.StatusConflict, map[string]string{"status": "demo_already_running"})
+		return
+	}
+	s.Engine.StartDemoLoop()
+	writeJSON(w, http.StatusOK, map[string]string{"status": "demo_started"})
+}
+
+func (s *Server) handleDemoStop(w http.ResponseWriter, r *http.Request) {
+	s.Engine.StopDemoLoop()
+	writeJSON(w, http.StatusOK, map[string]string{"status": "demo_stopped"})
+}
+
+func (s *Server) handleDemoStatus(w http.ResponseWriter, r *http.Request) {
+	info := s.Engine.DemoInfo()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"running":    info.Running,
+		"round":      info.Round,
+		"game_id":    info.GameID,
+		"scenario":   info.Scenario,
+		"started_at": info.StartedAt,
 	})
 }
 

@@ -129,6 +129,15 @@ function ServiceCard({ service, hasIncident = false, isAffected = false }: Servi
           ⚠️ Incidente activo — este servicio está siendo atacado
         </div>
       )}
+
+      {/* Branding watermark */}
+      <div style={styles.brandWatermark}>
+        <img
+          src="/assets/logo-gidas.png"
+          alt="GIDAS"
+          style={styles.brandLogo}
+        />
+      </div>
     </div>
   );
 }
@@ -140,6 +149,8 @@ const styles: Record<string, React.CSSProperties> = {
     borderRadius: "8px",
     padding: "1.5rem",
     transition: "all 0.3s ease",
+    position: "relative",
+    overflow: "hidden",
   },
   header: {
     display: "flex",
@@ -222,6 +233,17 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: "center",
     fontWeight: 700,
     letterSpacing: "0.05rem",
+  },
+  brandWatermark: {
+    position: "absolute",
+    bottom: "6px",
+    right: "8px",
+    opacity: 0.12,
+    pointerEvents: "none",
+  },
+  brandLogo: {
+    height: "16px",
+    width: "auto",
   },
 };
 

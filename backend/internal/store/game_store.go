@@ -263,6 +263,30 @@ func (s *Store) GetActiveIncident(gameID string) (*Incident, error) {
 	return inc, nil
 }
 
+// GetLatestIncidentForGame returns the most recent incident for a game,
+// regardless of status (active, resolved, timeout). Returns nil if not found.
+func (s *Store) GetLatestIncidentForGame(gameID string) (*Incident, error) {
+	row := s.DB.QueryRow(
+		`SELECT id, game_id, scenario_id, service_id, status, triggered_at, resolved_at
+		 FROM incidents WHERE game_id = ? ORDER BY triggered_at DESC LIMIT 1`,
+		gameID,
+	)
+	inc := &Incident{}
+	var triggeredAt, resolvedAt sql.NullString
+	if err := row.Scan(&inc.ID, &inc.GameID, &inc.ScenarioID, &inc.ServiceID, &inc.Status, &triggeredAt, &resolvedAt); err != nil {
+		return nil, err
+	}
+	if triggeredAt.Valid {
+		t, _ := time.Parse(time.RFC3339Nano, triggeredAt.String)
+		inc.TriggeredAt = t
+	}
+	if resolvedAt.Valid {
+		t, _ := time.Parse(time.RFC3339Nano, resolvedAt.String)
+		inc.ResolvedAt = &t
+	}
+	return inc, nil
+}
+
 // LeaderboardEntry represents a completed game in the leaderboard.
 type LeaderboardEntry struct {
 	ID                 int       `json:"id"`

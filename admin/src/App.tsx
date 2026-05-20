@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import useWebSocket from "./useWebSocket";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -36,6 +36,14 @@ interface LeaderboardEntry {
 interface WsEvent {
   type: string;
   [key: string]: unknown;
+}
+
+interface DemoStatus {
+  running: boolean;
+  round: number;
+  game_id?: string;
+  scenario?: string;
+  started_at?: string;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -76,6 +84,15 @@ async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   return res.json();
 }
 
+async function apiDelete<T>(path: string): Promise<T> {
+  const res = await fetch(path, { method: "DELETE" });
+  if (!res.ok) {
+    const errBody = await res.text();
+    throw new Error(`DELETE ${path}: ${res.status} — ${errBody}`);
+  }
+  return res.json();
+}
+
 // ── App ──────────────────────────────────────────────────────────────────────
 
 function App() {
@@ -88,12 +105,32 @@ function App() {
   const [playerName, setPlayerName] = useState("");
   const [pendingGames, setPendingGames] = useState<Game[]>([]);
   const [selectedGameId, setSelectedGameId] = useState("");
+  const [selectedScenarioId, setSelectedScenarioId] = useState("");
   const [activeGameId, setActiveGameId] = useState<string | null>(null);
   const [activeScenario, setActiveScenario] = useState<Scenario | null>(null);
   const [actionMsg, setActionMsg] = useState<string | null>(null);
 
+  // Confirmation state
+  const [confirmReset, setConfirmReset] = useState(false);
+
+  // Demo mode
+  const [demoRunning, setDemoRunning] = useState(false);
+  const [demoRound, setDemoRound] = useState(0);
+
   // Logs
   const [logs, setLogs] = useState<string[]>([]);
+
+  // ── Fetch helpers ─────────────────────────────────────────────────────────
+
+  const refreshAll = useCallback(() => {
+    apiGet<Game[]>("/api/games").then(setGames).catch(console.error);
+    apiGet<LeaderboardEntry[]>("/api/leaderboard").then(setLeaderboard).catch(console.error);
+  }, []);
+
+  const showMsg = useCallback((msg: string) => {
+    setActionMsg(msg);
+    setTimeout(() => setActionMsg(null), 5000);
+  }, []);
 
   // Fetch data on mount
   useEffect(() => {
@@ -117,37 +154,35 @@ function App() {
 
     switch (evt.type) {
       case "game_created":
-        // Refresh games list
-        apiGet<Game[]>("/api/games").then(setGames).catch(console.error);
-        setActionMsg(`${now} — Partida creada`);
+        refreshAll();
+        showMsg(`${now} — Partida creada`);
         break;
 
       case "game_started": {
         setActiveGameId((evt.game as Game)?.id ?? null);
         setActiveScenario(evt.scenario as Scenario ?? null);
-        setActionMsg(`${now} — Partida INICIADA`);
-        apiGet<Game[]>("/api/games").then(setGames).catch(console.error);
+        showMsg(`${now} — Partida INICIADA`);
+        refreshAll();
         break;
       }
 
       case "game_completed":
         setActiveGameId(null);
         setActiveScenario(null);
-        setActionMsg(`${now} — Partida COMPLETADA (score: ${evt.score})`);
-        apiGet<Game[]>("/api/games").then(setGames).catch(console.error);
-        apiGet<LeaderboardEntry[]>("/api/leaderboard").then(setLeaderboard).catch(console.error);
+        showMsg(`${now} — Partida COMPLETADA (score: ${evt.score})`);
+        refreshAll();
         break;
 
       case "game_abandoned":
       case "game_timeout":
         setActiveGameId(null);
         setActiveScenario(null);
-        setActionMsg(`${now} — Partida ${evt.type === "game_abandoned" ? "ABANDONADA" : "TIMEOUT"}`);
-        apiGet<Game[]>("/api/games").then(setGames).catch(console.error);
+        showMsg(`${now} — Partida ${evt.type === "game_abandoned" ? "ABANDONADA" : "TIMEOUT"}`);
+        refreshAll();
         break;
 
       case "incident_resolved":
-        setActionMsg(`${now} — Incidente resuelto (score: ${evt.score})`);
+        showMsg(`${now} — Incidente resuelto (score: ${evt.score})`);
         break;
     }
   };
@@ -162,47 +197,163 @@ function App() {
       await apiPost("/api/games", { player_name: playerName.trim() });
       setPlayerName("");
     } catch (err) {
-      setActionMsg(`Error: ${err}`);
+      showMsg(`Error: ${err}`);
     }
-  }, [playerName]);
+  }, [playerName, showMsg]);
 
   const handleStartGame = useCallback(async () => {
     if (!selectedGameId) return;
     try {
-      await apiPost(`/api/games/${selectedGameId}/start`);
+      const body: Record<string, string> = {};
+      if (selectedScenarioId) {
+        body.scenario_id = selectedScenarioId;
+      }
+      await apiPost(`/api/games/${selectedGameId}/start`, body);
+      setSelectedGameId("");
+      setSelectedScenarioId("");
     } catch (err) {
-      setActionMsg(`Error: ${err}`);
+      showMsg(`Error: ${err}`);
     }
-  }, [selectedGameId]);
+  }, [selectedGameId, selectedScenarioId, showMsg]);
 
   const handleResolveIncident = useCallback(async () => {
     if (!activeGameId) return;
     try {
       await apiPost(`/api/games/${activeGameId}/resolve`);
     } catch (err) {
-      setActionMsg(`Error: ${err}`);
+      showMsg(`Error: ${err}`);
     }
-  }, [activeGameId]);
+  }, [activeGameId, showMsg]);
 
-  const handleAbandonGame = useCallback(async () => {
-    if (!activeGameId) return;
+  const handleAbandonGame = useCallback(async (gameId?: string) => {
+    const id = gameId ?? activeGameId;
+    if (!id) return;
     try {
-      await apiPost(`/api/games/${activeGameId}/abandon`);
+      await apiPost(`/api/games/${id}/abandon`);
+      if (!gameId) showMsg("Partida abandonada");
     } catch (err) {
-      setActionMsg(`Error: ${err}`);
+      showMsg(`Error: ${err}`);
     }
-  }, [activeGameId]);
+  }, [activeGameId, showMsg]);
+
+  const handleDeleteGame = useCallback(async (gameId: string) => {
+    try {
+      await apiDelete(`/api/games/${gameId}`);
+      showMsg("Partida eliminada");
+      refreshAll();
+    } catch (err) {
+      showMsg(`Error: ${err}`);
+    }
+  }, [showMsg, refreshAll]);
+
+  const handleRestartGame = useCallback(async (game: Game) => {
+    // Create a new game with the same player name
+    try {
+      await apiPost("/api/games", { player_name: game.player_name });
+      showMsg(`Nueva partida creada para ${game.player_name}`);
+      refreshAll();
+    } catch (err) {
+      showMsg(`Error: ${err}`);
+    }
+  }, [showMsg, refreshAll]);
+
+  const handleAdminReset = useCallback(async () => {
+    try {
+      await apiPost("/api/admin/reset");
+      setActiveGameId(null);
+      setActiveScenario(null);
+      setConfirmReset(false);
+      showMsg("🔄 Reset global completado");
+      refreshAll();
+    } catch (err) {
+      showMsg(`Error: ${err}`);
+    }
+  }, [showMsg, refreshAll]);
+
+  // ── Demo Mode ────────────────────────────────────────────────────────────
+  const pollDemoRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const handleDemoStart = useCallback(async () => {
+    try {
+      await apiPost("/api/admin/demo");
+      setDemoRunning(true);
+      showMsg("🎮 Modo demo iniciado");
+      // Poll demo status
+      if (pollDemoRef.current) clearInterval(pollDemoRef.current);
+      pollDemoRef.current = setInterval(async () => {
+        try {
+          const status = await apiGet<DemoStatus>("/api/admin/demo");
+          setDemoRunning(status.running);
+          setDemoRound(status.round);
+          if (status.scenario) {
+            setActiveScenario({
+              id: status.game_id ?? "",
+              name: status.scenario,
+              description: "",
+              target_service_id: "",
+              failure_type: "",
+              severity: "high",
+              difficulty: 0,
+              hints: [],
+              fix_hint: "",
+              time_limit: 0,
+            });
+          }
+        } catch { /* ignore */ }
+      }, 2000);
+    } catch (err) {
+      showMsg(`Error: ${err}`);
+    }
+  }, [showMsg]);
+
+  const handleDemoStop = useCallback(async () => {
+    try {
+      await apiPost("/api/admin/demo/stop");
+      setDemoRunning(false);
+      setDemoRound(0);
+      setActiveScenario(null);
+      showMsg("⏹ Modo demo detenido");
+      if (pollDemoRef.current) {
+        clearInterval(pollDemoRef.current);
+        pollDemoRef.current = null;
+      }
+      refreshAll();
+    } catch (err) {
+      showMsg(`Error: ${err}`);
+    }
+  }, [showMsg, refreshAll]);
+
+  // Cleanup poll on unmount
+  useEffect(() => {
+    return () => {
+      if (pollDemoRef.current) clearInterval(pollDemoRef.current);
+    };
+  }, []);
 
   const formatDate = (s: string | null) => {
     if (!s) return "—";
     return new Date(s).toLocaleString();
   };
 
+  const activeGames = games.filter((g) => g.status === "active");
+
   return (
     <div style={styles.container}>
       <header style={styles.header}>
-        <h1 style={styles.title}>Downtime Game — Admin</h1>
+        <div style={styles.headerLeft}>
+          <img
+            src="/assets/logo-gidas.png"
+            alt="GIDAS"
+            style={styles.logoGidas}
+          />
+          <h1 style={styles.title}>Downtime Game — Admin</h1>
+        </div>
         <div style={styles.headerRight}>
+          <img
+            src="/assets/logo_infra_blanco.png"
+            alt="INFRA IT"
+            style={styles.logoInfra}
+          />
           {actionMsg && <span style={styles.actionMsg}>{actionMsg}</span>}
           <div style={styles.statusBar}>
             <span
@@ -241,17 +392,30 @@ function App() {
             </button>
           </div>
 
-          {/* Start Game */}
+          {/* Start Game — with scenario selector */}
           <div style={styles.controlRow}>
             <select
               style={styles.select}
               value={selectedGameId}
               onChange={(e) => setSelectedGameId(e.target.value)}
             >
-              <option value="">-- Seleccionar partida pendiente --</option>
+              <option value="">-- Partida pendiente --</option>
               {pendingGames.map((g) => (
                 <option key={g.id} value={g.id}>
                   {g.id.slice(0, 8)} — {g.player_name}
+                </option>
+              ))}
+            </select>
+            <select
+              style={styles.selectSmall}
+              value={selectedScenarioId}
+              onChange={(e) => setSelectedScenarioId(e.target.value)}
+              disabled={!selectedGameId}
+            >
+              <option value="">🎲 Aleatorio</option>
+              {scenarios.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name} ({SERVICE_NAMES[s.target_service_id] ?? s.target_service_id})
                 </option>
               ))}
             </select>
@@ -260,11 +424,11 @@ function App() {
               onClick={handleStartGame}
               disabled={!selectedGameId}
             >
-              ▶ Iniciar Partida
+              ▶ Iniciar
             </button>
           </div>
 
-          {/* Active game controls */}
+          {/* Active game banner */}
           {activeGameId && (
             <div style={styles.activeBanner}>
               <div style={styles.activeInfo}>
@@ -283,19 +447,71 @@ function App() {
               </div>
               <div style={styles.activeButtons}>
                 <button style={styles.btnResolve} onClick={handleResolveIncident}>
-                  ✅ Resolver Incidente
+                  ✅ Resolver
                 </button>
-                <button style={styles.btnAbandon} onClick={handleAbandonGame}>
-                  ⏹ Abandonar Partida
+                <button style={styles.btnAbandon} onClick={() => handleAbandonGame()}>
+                  ⏹ Abandonar
                 </button>
               </div>
             </div>
           )}
+
+          {/* Active games count + Reset */}
+          <div style={styles.controlRow}>
+            <div style={styles.infoRow}>
+              <span style={styles.infoItem}>
+                🎮 Partidas: <strong>{games.length}</strong>
+              </span>
+              <span style={styles.infoItem}>
+                🔴 Activas: <strong style={{ color: "#FF4444" }}>{activeGames.length}</strong>
+              </span>
+              <span style={styles.infoItem}>
+                ⏳ Pendientes: <strong style={{ color: "#FFD700" }}>{pendingGames.length}</strong>
+              </span>
+            </div>
+            <div style={styles.flex1} />
+            {demoRunning ? (
+              <button
+                style={styles.btnDemoActive}
+                onClick={handleDemoStop}
+              >
+                ⏹ Demo R{demoRound}
+              </button>
+            ) : (
+              <button
+                style={styles.btnDemo}
+                onClick={handleDemoStart}
+              >
+                🎮 Demo
+              </button>
+            )}
+            {!confirmReset ? (
+              <button
+                style={styles.btnDanger}
+                onClick={() => setConfirmReset(true)}
+              >
+                🛑 Reset
+              </button>
+            ) : (
+              <div style={styles.confirmRow}>
+                <span style={styles.confirmText}>¿Resetear todo?</span>
+                <button style={styles.btnDanger} onClick={handleAdminReset}>
+                  ✓ Conf
+                </button>
+                <button
+                  style={styles.btnCancel}
+                  onClick={() => setConfirmReset(false)}
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+          </div>
         </section>
 
         {/* ── Games List ── */}
         <section style={styles.section}>
-          <h2 style={styles.sectionTitle}>Partidas</h2>
+          <h2 style={styles.sectionTitle}>Partidas ({games.length})</h2>
           <div style={styles.tableWrap}>
             <table style={styles.table}>
               <thead>
@@ -306,12 +522,13 @@ function App() {
                   <th style={styles.th}>Puntaje</th>
                   <th style={styles.th}>Inicio</th>
                   <th style={styles.th}>Fin</th>
+                  <th style={styles.th}>Acciones</th>
                 </tr>
               </thead>
               <tbody>
                 {games.length === 0 ? (
                   <tr>
-                    <td style={styles.td} colSpan={6}>
+                    <td style={styles.td} colSpan={7}>
                       Sin partidas aún
                     </td>
                   </tr>
@@ -338,6 +555,36 @@ function App() {
                       </td>
                       <td style={styles.td}>{formatDate(g.started_at)}</td>
                       <td style={styles.td}>{formatDate(g.ended_at)}</td>
+                      <td style={styles.td}>
+                        <div style={styles.actionCell}>
+                          {g.status === "active" ? (
+                            <button
+                              style={styles.btnSmallDanger}
+                              onClick={() => handleAbandonGame(g.id)}
+                              title="Detener partida"
+                            >
+                              ⏹
+                            </button>
+                          ) : (
+                            <>
+                              <button
+                                style={styles.btnSmallRestart}
+                                onClick={() => handleRestartGame(g)}
+                                title="Reiniciar (mismo jugador)"
+                              >
+                                🔄
+                              </button>
+                              <button
+                                style={styles.btnSmallDelete}
+                                onClick={() => handleDeleteGame(g.id)}
+                                title="Eliminar partida"
+                              >
+                                🗑
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   ))
                 )}
@@ -421,6 +668,30 @@ function App() {
             )}
           </div>
         </section>
+
+        {/* ── Footer ── */}
+        <footer style={styles.footer}>
+          <div style={styles.footerContent}>
+            <span style={styles.footerBrand}>
+              <img
+                src="/assets/logo-gidas.png"
+                alt="GIDAS"
+                style={styles.footerLogo}
+              />
+              <span style={styles.footerText}>
+                Downtime Game — INFRA IT · GIDAS · UTN FRSF
+              </span>
+              <img
+                src="/assets/logo-utn.svg"
+                alt="UTN"
+                style={styles.footerLogoUtn}
+              />
+            </span>
+            <span style={styles.footerVersion}>
+              v1.0 · {games.length} partidas · {leaderboard.length} scores
+            </span>
+          </div>
+        </footer>
       </div>
     </div>
   );
@@ -444,7 +715,24 @@ const styles: Record<string, any> = {
     borderBottom: "1px solid rgba(255,255,255,0.1)",
     paddingBottom: "1rem",
     flexWrap: "wrap",
-    gap: "0.5rem",
+    gap: "0.75rem",
+  },
+  headerLeft: {
+    display: "flex",
+    alignItems: "center",
+    gap: "1rem",
+  },
+  logoGidas: {
+    height: "36px",
+    width: "auto",
+    opacity: 0.9,
+    filter: "brightness(1.2)",
+  },
+  logoInfra: {
+    height: "32px",
+    width: "auto",
+    opacity: 0.8,
+    filter: "brightness(1.1)",
   },
   title: {
     fontSize: "1.5rem",
@@ -505,6 +793,7 @@ const styles: Record<string, any> = {
     gap: "0.5rem",
     marginBottom: "0.75rem",
     flexWrap: "wrap",
+    alignItems: "center",
   },
   input: {
     flex: 1,
@@ -530,6 +819,19 @@ const styles: Record<string, any> = {
     fontSize: "0.85rem",
     outline: "none",
   },
+  selectSmall: {
+    flex: 1,
+    minWidth: "200px",
+    maxWidth: "300px",
+    padding: "0.6rem 0.8rem",
+    background: "rgba(0,0,0,0.4)",
+    border: "1px solid rgba(255,255,255,0.15)",
+    borderRadius: "4px",
+    color: "#fff",
+    fontFamily: "monospace",
+    fontSize: "0.85rem",
+    outline: "none",
+  },
   btn: {
     padding: "0.6rem 1.2rem",
     background: "rgba(255,215,0,0.15)",
@@ -542,6 +844,55 @@ const styles: Record<string, any> = {
     cursor: "pointer",
     whiteSpace: "nowrap",
     transition: "all 0.2s",
+  },
+  btnDemo: {
+    padding: "0.6rem 1.2rem",
+    background: "rgba(0,255,127,0.12)",
+    border: "1px solid #00FF7F",
+    borderRadius: "4px",
+    color: "#00FF7F",
+    fontFamily: "monospace",
+    fontSize: "0.85rem",
+    fontWeight: 700,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    animation: "pulse-green 2s infinite",
+  },
+  btnDemoActive: {
+    padding: "0.6rem 1.2rem",
+    background: "rgba(255,68,68,0.15)",
+    border: "1px solid #FF4444",
+    borderRadius: "4px",
+    color: "#FF4444",
+    fontFamily: "monospace",
+    fontSize: "0.85rem",
+    fontWeight: 700,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    animation: "pulse-red 1s infinite",
+  },
+  btnDanger: {
+    padding: "0.6rem 1.2rem",
+    background: "rgba(255,68,68,0.15)",
+    border: "1px solid #FF4444",
+    borderRadius: "4px",
+    color: "#FF4444",
+    fontFamily: "monospace",
+    fontSize: "0.85rem",
+    fontWeight: 700,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+    transition: "all 0.2s",
+  },
+  btnCancel: {
+    padding: "0.4rem 0.8rem",
+    background: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(255,255,255,0.2)",
+    borderRadius: "4px",
+    color: "rgba(255,255,255,0.6)",
+    fontFamily: "monospace",
+    fontSize: "0.8rem",
+    cursor: "pointer",
   },
   activeBanner: {
     marginTop: "0.5rem",
@@ -607,6 +958,28 @@ const styles: Record<string, any> = {
     fontWeight: 700,
     cursor: "pointer",
   },
+  infoRow: {
+    display: "flex",
+    gap: "1rem",
+    flexWrap: "wrap",
+  },
+  infoItem: {
+    fontSize: "0.8rem",
+    color: "rgba(255,255,255,0.5)",
+  },
+  flex1: {
+    flex: 1,
+  },
+  confirmRow: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+  },
+  confirmText: {
+    fontSize: "0.8rem",
+    color: "#FF4444",
+    fontWeight: 700,
+  },
   tableWrap: {
     overflowX: "auto",
   },
@@ -638,6 +1011,41 @@ const styles: Record<string, any> = {
     borderRadius: "3px",
     fontWeight: 700,
     letterSpacing: "0.05rem",
+  },
+  actionCell: {
+    display: "flex",
+    gap: "0.3rem",
+    alignItems: "center",
+  },
+  btnSmallDanger: {
+    padding: "0.2rem 0.4rem",
+    background: "rgba(255,68,68,0.15)",
+    border: "1px solid rgba(255,68,68,0.4)",
+    borderRadius: "3px",
+    color: "#FF4444",
+    cursor: "pointer",
+    fontSize: "0.8rem",
+    lineHeight: 1,
+  },
+  btnSmallRestart: {
+    padding: "0.2rem 0.4rem",
+    background: "rgba(0,255,127,0.1)",
+    border: "1px solid rgba(0,255,127,0.3)",
+    borderRadius: "3px",
+    color: "#00FF7F",
+    cursor: "pointer",
+    fontSize: "0.8rem",
+    lineHeight: 1,
+  },
+  btnSmallDelete: {
+    padding: "0.2rem 0.4rem",
+    background: "rgba(255,68,68,0.1)",
+    border: "1px solid rgba(255,68,68,0.3)",
+    borderRadius: "3px",
+    color: "#FF4444",
+    cursor: "pointer",
+    fontSize: "0.8rem",
+    lineHeight: 1,
   },
   empty: {
     fontSize: "0.8rem",
@@ -723,6 +1131,46 @@ const styles: Record<string, any> = {
       fontWeight: 700,
       letterSpacing: "0.05rem",
     };
+  },
+
+  // ── Footer ──
+  footer: {
+    marginTop: "1rem",
+    padding: "0.75rem 1rem",
+    background: "rgba(255,255,255,0.02)",
+    borderTop: "1px solid rgba(255,255,255,0.06)",
+  },
+  footerContent: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: "0.5rem",
+  },
+  footerBrand: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.75rem",
+  },
+  footerLogo: {
+    height: "20px",
+    width: "auto",
+    opacity: 0.5,
+  },
+  footerLogoUtn: {
+    height: "18px",
+    width: "auto",
+    opacity: 0.4,
+  },
+  footerText: {
+    fontSize: "0.65rem",
+    color: "rgba(255,255,255,0.25)",
+    letterSpacing: "0.05rem",
+  },
+  footerVersion: {
+    fontSize: "0.6rem",
+    color: "rgba(255,255,255,0.15)",
+    letterSpacing: "0.05rem",
   },
 };
 
