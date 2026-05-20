@@ -91,7 +91,18 @@ scp_proxmox() {
 }
 
 pct_exec() {
-    ssh_proxmox "pct exec ${CT_ID} -- $*"
+    # Usa printf '%q' para escapar cada argumento correctamente.
+    # Sin esto, los bash -c con comandos largos se rompen al pasar por
+    # ssh_proxmox porque las comillas anidadas colapsan.
+    local cmd=""
+    for arg in "$@"; do
+        if [ -z "$cmd" ]; then
+            cmd="$(printf '%q' "$arg")"
+        else
+            cmd="$cmd $(printf '%q' "$arg")"
+        fi
+    done
+    ssh_proxmox "pct exec ${CT_ID} -- ${cmd}"
 }
 
 ct_upload() {
