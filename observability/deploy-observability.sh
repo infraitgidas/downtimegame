@@ -246,7 +246,9 @@ else
         cp blackbox_exporter-${BLACKBOX_VERSION}.linux-amd64/blackbox_exporter /usr/local/bin/
         rm -rf blackbox_exporter-${BLACKBOX_VERSION}.linux-amd64*
     "
-    ok "Blackbox Exporter instalado"
+    # CAP_NET_RAW necesaria para que Blackbox pueda hacer probes ICMP
+    pct_exec setcap cap_net_raw+ep /usr/local/bin/blackbox_exporter
+    ok "Blackbox Exporter instalado (cap_net_raw+ep)"
 
     # ── 8. Upload config files ──
     info "Paso 8: Subiendo archivos de configuracion..."
