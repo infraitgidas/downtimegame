@@ -66,7 +66,7 @@
 
 ---
 
-## Fase 2: Escenarios de downtime + lógica de juego 🔄
+## Fase 2: Escenarios de downtime + lógica de juego ✅
 
 > ⬇️ Arrancamos ahora mismo. Detalle abajo.
 
@@ -100,39 +100,53 @@
 - [x] Eventos: incident_active, incident_resolved, timer_tick, service_status
 - [x] Broadcast automático a todos los clientes conectados
 
-### 2.6 Admin Panel — Controles funcionales ⏳
-- [ ] Botón "Iniciar Partida" funcional (pide nombre del jugador)
-- [ ] Botón "Detener Partida"
-- [ ] Visualización de escenario activo
-- [ ] Historial de partidas/results
+### 2.6 Admin Panel — Controles funcionales ✅
+- [x] Botón "Iniciar Partida" funcional (pide nombre del jugador)
+- [x] Botón "Iniciar" partida pendiente seleccionada
+- [x] Botón "Resolver Incidente" y "Abandonar Partida"
+- [x] Visualización de escenario activo con severidad y dificultad
+- [x] Historial de partidas con estado y puntaje
+- [x] Leaderboard en vivo
+- [x] Catálogo de escenarios
 
-### 2.7 Dashboard — Alarma y cronómetro ⏳
-- [ ] Tarjeta de alarma roja cuando hay un incidente activo
-- [ ] Cronómetro de resolución visible (grande, rojo, pulsante)
-- [ ] Indicador de servicio afectado
-- [ ] Mensaje de bienvenida al iniciar partida
+### 2.7 Dashboard — Alarma y cronómetro ✅
+- [x] Alarma roja pulsante overlay cuando hay incidente activo
+- [x] Cronómetro countdown con barra de progreso
+- [x] Indicador de servicio afectado con animación
+- [x] Pistas del escenario visibles durante el incidente
+- [x] Cards de servicios con estado de incidente
 
 ---
 
-## Fase 3: Dashboard con métricas y alarmas reales ⏳
+## Fase 3: Integración real con LXC (hardware) 🔄
 
+> ⬇️ Arrancamos ahora mismo. Detalle abajo.
+
+### 3.1 SSH Executor — Trigger/Resolve real vía SSH a Proxmox ✅
+- [x] Implementar `SSHExecutor` que conecta a Proxmox host (192.168.1.31)
+- [x] `Trigger()`: `pct exec {vmid} systemctl stop sg-{color}`
+- [x] `Resolve()`: `pct exec {vmid} systemctl start sg-{color}`
+- [x] Config vía env vars: `LXC_SSH_HOST`, `LXC_SSH_USER`, `LXC_SSH_KEY_PATH`
+- [x] Switchear entre simulado/real vía `EXECUTOR_MODE=ssh|simulated`
+- [x] `NewExecutorFromEnv()` factory que lee `EXECUTOR_MODE` al iniciar
+
+### 3.2 Health Checks Reales
+- [ ] Health checker apunta a IPs reales de LXC (192.168.1.200-203)
+- [ ] Detección de transiciones online/offline → callback al engine
+- [ ] Timeout configurable por servicio
+
+### 3.3 Deploy & Provisión de LXC
+- [ ] Script de deploy vía SSH a Proxmox (`deploy-all.py`)
+- [ ] systemd units para cada servicio (sg-rojo, sg-azul, sg-verde, sg-amarillo)
+- [ ] Verificación de conectividad MikroTik
+- [ ] Modo "offline" (simulado) vs "online" (LXC real)
+
+### 3.4 Dashboard Mejores (post-integracion)
 - [ ] Historial de uptime por servicio (gráfico de línea temporal)
 - [ ] Dashboard de latencia (ping times a cada LXC)
 - [ ] Alertas configurables (thresholds de latencia, timeout, etc.)
-- [ ] Visualización de incidentes históricos
 - [ ] Modo kiosk para Monitor 1 (pantalla completa)
 - [ ] Auto-reconexión WebSocket robusta
-
----
-
-## Fase 4: Integración con hardware real (LXC, red) ⏳
-
-- [ ] Script de deploy de servicios a 4 CTs LXC
-- [ ] Health checks reales contra IPs de LXC
-- [ ] Trigger de downtime real vía SSH a LXC (systemctl stop)
-- [ ] Restauración automática de servicios al finalizar partida
-- [ ] Verificación de conectividad de red MikroTik
-- [ ] Modo "offline" (simulación) vs "online" (LXC real)
 
 ---
 

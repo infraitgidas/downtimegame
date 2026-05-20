@@ -41,6 +41,13 @@ func main() {
 	// ── Initialize game engine ────────────────────────────────────────────
 	gameEngine := game.NewEngine(dataStore, gameHub)
 
+	// ── Configure executor mode ───────────────────────────────────────────
+	// EXECUTOR_MODE=simulated (default) → no-op, for development/testing
+	// EXECUTOR_MODE=ssh               → real LXC control via Proxmox SSH
+	executor := game.NewExecutorFromEnv()
+	gameEngine.SetExecutor(executor)
+	log.Printf("Executor configured: %s", executor.Name())
+
 	// ── Initialize HTTP server ────────────────────────────────────────────
 	srv := server.New(gameHub, gameEngine, dataStore)
 
