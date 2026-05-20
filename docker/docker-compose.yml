@@ -2,6 +2,18 @@
 # Docker Compose — Downtime Game
 # Orchestrates: backend, dashboard, admin, nginx
 # =============================================================================
+#
+# USO:
+#   Modo simulado (default, sin LXC):
+#     make docker-up
+#
+#   Modo SSH real (con LXC):
+#     export EXECUTOR_MODE=ssh
+#     export LXC_SSH_HOST=192.168.1.31
+#     export LXC_SSH_USER=root
+#     export LXC_SSH_KEY_PATH=~/.ssh/id_rsa
+#     make docker-up
+# =============================================================================
 
 services:
   backend:
@@ -12,6 +24,15 @@ services:
       - "8080:8080"
     environment:
       - PORT=8080
+      - DB_PATH=/data/downtime-game.db
+      - EXECUTOR_MODE=${EXECUTOR_MODE:-simulated}
+      - LXC_SSH_HOST=${LXC_SSH_HOST:-192.168.1.31}
+      - LXC_SSH_USER=${LXC_SSH_USER:-root}
+      - LXC_SSH_PORT=${LXC_SSH_PORT:-22}
+      - LXC_SSH_KEY_PATH=/root/.ssh/id_rsa
+    volumes:
+      - downtime-data:/data
+      - ${LXC_SSH_KEY_PATH:-/dev/null}:/root/.ssh/id_rsa:ro
     networks:
       - downtime-net
     restart: unless-stopped
@@ -53,6 +74,10 @@ services:
       - dashboard
       - admin
     restart: unless-stopped
+
+volumes:
+  downtime-data:
+    driver: local
 
 networks:
   downtime-net:

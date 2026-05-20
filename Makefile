@@ -36,6 +36,14 @@ docker-up: ## Start Docker Compose services
 	@cd docker && docker compose up --build -d
 	@echo "✅ Docker services started"
 
+deploy-pc: ## Deploy to game PC (192.168.1.54) in simulated mode
+	@echo "Deploying to PC (simulated mode)..."
+	@./deploy-pc.sh
+
+deploy-pc-ssh: ## Deploy to game PC with real LXC/SSH
+	@echo "Deploying to PC (SSH/real mode)..."
+	@./deploy-pc.sh --ssh
+
 docker-down: ## Stop Docker Compose services
 	@echo "Stopping Docker services..."
 	@cd docker && docker compose down
