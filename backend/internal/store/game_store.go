@@ -21,7 +21,7 @@ func (s *Store) CreateGame(id, playerName string) (*Game, error) {
 	now := time.Now().UTC()
 	_, err := s.DB.Exec(
 		`INSERT INTO games (id, player_name, status, created_at) VALUES (?, ?, 'pending', ?)`,
-		id, playerName, now.Format(time.RFC3339),
+		id, playerName, now.Format(time.RFC3339Nano),
 	)
 	if err != nil {
 		return nil, err
@@ -47,15 +47,15 @@ func (s *Store) GetGame(id string) (*Game, error) {
 		return nil, err
 	}
 	if createdAt.Valid {
-		t, _ := time.Parse(time.RFC3339, createdAt.String)
+		t, _ := time.Parse(time.RFC3339Nano, createdAt.String)
 		g.CreatedAt = t
 	}
 	if startedAt.Valid {
-		t, _ := time.Parse(time.RFC3339, startedAt.String)
+		t, _ := time.Parse(time.RFC3339Nano, startedAt.String)
 		g.StartedAt = &t
 	}
 	if endedAt.Valid {
-		t, _ := time.Parse(time.RFC3339, endedAt.String)
+		t, _ := time.Parse(time.RFC3339Nano, endedAt.String)
 		g.EndedAt = &t
 	}
 	return g, nil
@@ -79,15 +79,15 @@ func (s *Store) ListGames() ([]*Game, error) {
 			return nil, err
 		}
 		if createdAt.Valid {
-			t, _ := time.Parse(time.RFC3339, createdAt.String)
+			t, _ := time.Parse(time.RFC3339Nano, createdAt.String)
 			g.CreatedAt = t
 		}
 		if startedAt.Valid {
-			t, _ := time.Parse(time.RFC3339, startedAt.String)
+			t, _ := time.Parse(time.RFC3339Nano, startedAt.String)
 			g.StartedAt = &t
 		}
 		if endedAt.Valid {
-			t, _ := time.Parse(time.RFC3339, endedAt.String)
+			t, _ := time.Parse(time.RFC3339Nano, endedAt.String)
 			g.EndedAt = &t
 		}
 		games = append(games, g)
@@ -98,7 +98,7 @@ func (s *Store) ListGames() ([]*Game, error) {
 // UpdateGameStatus changes a game's status. Valid transitions:
 // pending -> active, active -> completed, active -> abandoned
 func (s *Store) UpdateGameStatus(id, status string) error {
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC().Format(time.RFC3339Nano)
 	var query string
 	switch status {
 	case "active":
@@ -112,16 +112,16 @@ func (s *Store) UpdateGameStatus(id, status string) error {
 	}
 
 	var err error
-	if status == "completed" {
-		// Get current score first
+	switch status {
+	case "completed":
 		game, err := s.GetGame(id)
 		if err != nil {
 			return err
 		}
 		_, err = s.DB.Exec(query, status, game.Score, now, id)
-	} else if status == "active" {
+	case "active", "abandoned":
 		_, err = s.DB.Exec(query, status, now, id)
-	} else {
+	default:
 		_, err = s.DB.Exec(query, status, id)
 	}
 	return err
@@ -149,7 +149,7 @@ func (s *Store) CreateIncident(id, gameID, scenarioID, serviceID string) (*Incid
 	now := time.Now().UTC()
 	_, err := s.DB.Exec(
 		`INSERT INTO incidents (id, game_id, scenario_id, service_id, status, triggered_at) VALUES (?, ?, ?, ?, 'active', ?)`,
-		id, gameID, scenarioID, serviceID, now.Format(time.RFC3339),
+		id, gameID, scenarioID, serviceID, now.Format(time.RFC3339Nano),
 	)
 	if err != nil {
 		return nil, err
@@ -166,7 +166,7 @@ func (s *Store) CreateIncident(id, gameID, scenarioID, serviceID string) (*Incid
 
 // ResolveIncident marks an incident as resolved.
 func (s *Store) ResolveIncident(id string) error {
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC().Format(time.RFC3339Nano)
 	_, err := s.DB.Exec(
 		`UPDATE incidents SET status = 'resolved', resolved_at = ? WHERE id = ?`,
 		now, id,
@@ -182,12 +182,16 @@ func (s *Store) GetActiveIncident(gameID string) (*Incident, error) {
 		gameID,
 	)
 	inc := &Incident{}
-	var resolvedAt sql.NullString
-	if err := row.Scan(&inc.ID, &inc.GameID, &inc.ScenarioID, &inc.ServiceID, &inc.Status, &inc.TriggeredAt, &resolvedAt); err != nil {
+	var triggeredAt, resolvedAt sql.NullString
+	if err := row.Scan(&inc.ID, &inc.GameID, &inc.ScenarioID, &inc.ServiceID, &inc.Status, &triggeredAt, &resolvedAt); err != nil {
 		return nil, err
 	}
+	if triggeredAt.Valid {
+		t, _ := time.Parse(time.RFC3339Nano, triggeredAt.String)
+		inc.TriggeredAt = t
+	}
 	if resolvedAt.Valid {
-		t, _ := time.Parse(time.RFC3339, resolvedAt.String)
+		t, _ := time.Parse(time.RFC3339Nano, resolvedAt.String)
 		inc.ResolvedAt = &t
 	}
 	return inc, nil
@@ -204,7 +208,7 @@ type LeaderboardEntry struct {
 
 // AddLeaderboardEntry inserts a completed game into the leaderboard.
 func (s *Store) AddLeaderboardEntry(playerName string, score, seconds int) error {
-	now := time.Now().UTC().Format(time.RFC3339)
+	now := time.Now().UTC().Format(time.RFC3339Nano)
 	_, err := s.DB.Exec(
 		`INSERT INTO leaderboard (player_name, score, resolved_in_seconds, completed_at) VALUES (?, ?, ?, ?)`,
 		playerName, score, seconds, now,
@@ -235,7 +239,7 @@ func (s *Store) GetLeaderboard(limit int) ([]*LeaderboardEntry, error) {
 			return nil, err
 		}
 		if completedAt.Valid {
-			t, _ := time.Parse(time.RFC3339, completedAt.String)
+			t, _ := time.Parse(time.RFC3339Nano, completedAt.String)
 			e.CompletedAt = t
 		}
 		entries = append(entries, e)

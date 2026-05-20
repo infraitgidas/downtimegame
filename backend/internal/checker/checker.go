@@ -70,11 +70,20 @@ func (c *Checker) Start() {
 // Stop terminates the polling goroutine.
 func (c *Checker) Stop() {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	if !c.running {
+	wasRunning := c.running
+	c.running = false
+	c.mu.Unlock()
+
+	if !wasRunning {
 		return
 	}
-	c.running = false
+
+	// Use recover to handle double-close gracefully
+	defer func() {
+		if r := recover(); r != nil {
+			log.Printf("Checker: stop recovered from panic: %v", r)
+		}
+	}()
 	close(c.stopCh)
 	log.Println("Checker: stopped")
 }
