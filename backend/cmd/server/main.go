@@ -10,8 +10,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/ema/downtime-game/internal/game"
 	"github.com/ema/downtime-game/internal/hub"
 	"github.com/ema/downtime-game/internal/server"
+	"github.com/ema/downtime-game/internal/store"
 )
 
 func main() {
@@ -20,10 +22,27 @@ func main() {
 		port = "8080"
 	}
 
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = "downtime-game.db"
+	}
+
+	// ── Initialize store (SQLite) ─────────────────────────────────────────
+	dataStore, err := store.New(dbPath)
+	if err != nil {
+		log.Fatalf("Failed to initialize store: %v", err)
+	}
+	defer dataStore.Close()
+
+	// ── Initialize WebSocket hub ──────────────────────────────────────────
 	gameHub := hub.NewHub()
 	go gameHub.Run()
 
-	srv := server.New(gameHub)
+	// ── Initialize game engine ────────────────────────────────────────────
+	gameEngine := game.NewEngine(dataStore, gameHub)
+
+	// ── Initialize HTTP server ────────────────────────────────────────────
+	srv := server.New(gameHub, gameEngine, dataStore)
 
 	httpServer := &http.Server{
 		Addr:         ":" + port,
@@ -33,7 +52,7 @@ func main() {
 		IdleTimeout:  60 * time.Second,
 	}
 
-	// Graceful shutdown
+	// ── Graceful shutdown ─────────────────────────────────────────────────
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 
