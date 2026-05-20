@@ -1,0 +1,1 @@
+Fase 2= Escenarios de downtime + lógica de juego. Cuando quieras arrancamos.
