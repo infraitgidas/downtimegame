@@ -69,7 +69,79 @@ func New(gameHub *hub.Hub, gameEngine *game.Engine, dataStore *store.Store) *Ser
 		r.Get("/leaderboard", s.handleLeaderboard)
 	})
 
+	// Register WebSocket message handlers (admin commands)
+	s.registerWSHandlers()
+
 	return s
+}
+
+// registerWSHandlers sets up handlers for incoming WebSocket messages.
+// These allow admin clients to send game commands via WS instead of REST.
+func (s *Server) registerWSHandlers() {
+	s.Hub.Router.Handle("create_game", func(client *hub.Client, msg hub.Message) {
+		var payload struct {
+			PlayerName string `json:"player_name"`
+		}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			log.Printf("WS create_game: invalid payload: %v", err)
+			return
+		}
+		game, err := s.Engine.CreateGame(payload.PlayerName)
+		if err != nil {
+			log.Printf("WS create_game error: %v", err)
+			return
+		}
+		log.Printf("WS: game created %s (player: %s)", game.ID, payload.PlayerName)
+	})
+
+	s.Hub.Router.Handle("start_game", func(client *hub.Client, msg hub.Message) {
+		var payload struct {
+			GameID string `json:"game_id"`
+		}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			log.Printf("WS start_game: invalid payload: %v", err)
+			return
+		}
+		inst, err := s.Engine.StartGame(payload.GameID)
+		if err != nil {
+			log.Printf("WS start_game error: %v", err)
+			return
+		}
+		log.Printf("WS: game started %s (scenario: %s)", payload.GameID, inst.Scenario.ID)
+	})
+
+	s.Hub.Router.Handle("resolve_incident", func(client *hub.Client, msg hub.Message) {
+		var payload struct {
+			GameID string `json:"game_id"`
+		}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			log.Printf("WS resolve_incident: invalid payload: %v", err)
+			return
+		}
+		game, err := s.Engine.ResolveIncident(payload.GameID)
+		if err != nil {
+			log.Printf("WS resolve_incident error: %v", err)
+			return
+		}
+		log.Printf("WS: incident resolved for game %s (score: %d)", payload.GameID, game.Score)
+	})
+
+	s.Hub.Router.Handle("abandon_game", func(client *hub.Client, msg hub.Message) {
+		var payload struct {
+			GameID string `json:"game_id"`
+		}
+		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+			log.Printf("WS abandon_game: invalid payload: %v", err)
+			return
+		}
+		if err := s.Engine.AbandonGame(payload.GameID); err != nil {
+			log.Printf("WS abandon_game error: %v", err)
+			return
+		}
+		log.Printf("WS: game abandoned %s", payload.GameID)
+	})
+
+	log.Println("WS handlers registered: create_game, start_game, resolve_incident, abandon_game")
 }
 
 // ── Health ───────────────────────────────────────────────────────────────────

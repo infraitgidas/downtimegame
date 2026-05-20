@@ -19,18 +19,37 @@ type Engine struct {
 	mu             sync.RWMutex
 	store          *store.Store
 	hub            *hub.Hub
+	executor       Executor
 	serviceStatus  map[string]*ServiceStatus // serviceID -> current status
 	activeGames    map[string]*GameInstance  // gameID -> game instance
 }
 
 // NewEngine creates a new game engine with the given store and hub.
+// Uses a SimulatedExecutor by default; call SetExecutor to change.
 func NewEngine(s *store.Store, h *hub.Hub) *Engine {
-	return &Engine{
+	e := &Engine{
 		store:         s,
 		hub:           h,
 		serviceStatus: defaultServiceStatuses(),
 		activeGames:   make(map[string]*GameInstance),
 	}
+	e.executor = NewSimulatedExecutor()
+	return e
+}
+
+// SetExecutor changes the incident executor (e.g., to SSHExecutor in production).
+func (e *Engine) SetExecutor(exec Executor) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.executor = exec
+	log.Printf("Engine: executor set to %s", exec.Name())
+}
+
+// Executor returns the current executor.
+func (e *Engine) Executor() Executor {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.executor
 }
 
 // defaultServiceStatuses initializes all 4 services as online.
@@ -60,6 +79,40 @@ func (e *Engine) GetServiceStatus(serviceID string) *ServiceStatus {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.serviceStatus[serviceID]
+}
+
+// setServiceStatus updates the in-memory service status WITHOUT locking.
+// The caller MUST hold e.mu write lock.
+func (e *Engine) setServiceStatus(serviceID string, online bool, incident bool) {
+	if e.serviceStatus[serviceID] != nil {
+		e.serviceStatus[serviceID].Online = online
+		e.serviceStatus[serviceID].Incident = incident
+	}
+
+	e.broadcastEvent(EventServiceStatus, map[string]any{
+		"service_id": serviceID,
+		"online":     online,
+		"incident":   incident,
+	})
+}
+
+// SetServiceStatusFromChecker is called by the health checker (external goroutine)
+// when a real service transitions between online/offline.
+// It acquires the write lock internally.
+func (e *Engine) SetServiceStatusFromChecker(serviceID string, online bool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if e.serviceStatus[serviceID] != nil {
+		e.serviceStatus[serviceID].Online = online
+		// Don't clear incident flag — that's game-managed
+	}
+
+	e.broadcastEvent(EventServiceStatus, map[string]any{
+		"service_id": serviceID,
+		"online":     online,
+		"incident":   e.serviceStatus[serviceID] != nil && e.serviceStatus[serviceID].Incident,
+	})
 }
 
 // CreateGame creates a new game in pending state.
@@ -124,6 +177,12 @@ func (e *Engine) StartGame(gameID string) (*GameInstance, error) {
 	if e.serviceStatus[scenario.TargetServiceID] != nil {
 		e.serviceStatus[scenario.TargetServiceID].Online = false
 		e.serviceStatus[scenario.TargetServiceID].Incident = true
+	}
+
+	// Execute the physical failure (simulated or real)
+	if err := e.executor.Trigger(scenario); err != nil {
+		// Log but continue — the logical game state is already updated
+		log.Printf("Executor trigger error: %v", err)
 	}
 
 	inst := &GameInstance{
@@ -202,6 +261,11 @@ func (e *Engine) ResolveIncident(gameID string) (*store.Game, error) {
 	if e.serviceStatus[inst.Scenario.TargetServiceID] != nil {
 		e.serviceStatus[inst.Scenario.TargetServiceID].Online = true
 		e.serviceStatus[inst.Scenario.TargetServiceID].Incident = false
+	}
+
+	// Execute the physical restoration (simulated or real)
+	if err := e.executor.Resolve(inst.Scenario); err != nil {
+		log.Printf("Executor resolve error: %v", err)
 	}
 
 	// Stop timer

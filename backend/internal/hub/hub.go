@@ -23,6 +23,7 @@ type Hub struct {
 	unregister chan *Client
 	broadcast  chan []byte
 	rooms      map[string]map[*Client]bool
+	Router     *Router
 }
 
 // NewHub creates a new Hub instance.
@@ -33,7 +34,19 @@ func NewHub() *Hub {
 		unregister: make(chan *Client),
 		broadcast:  make(chan []byte, 256),
 		rooms:      make(map[string]map[*Client]bool),
+		Router:     NewRouter(),
 	}
+}
+
+// HandleIncoming processes a raw message from a client.
+// It first tries to route through registered handlers; if no handler matches,
+// it broadcasts the message to all clients (legacy behavior).
+func (h *Hub) HandleIncoming(client *Client, data []byte) {
+	if h.Router.Route(client, data) {
+		return // handled by a registered handler
+	}
+	// No handler registered — broadcast to all (legacy behavior)
+	h.broadcast <- data
 }
 
 // Run starts the hub's event loop. Must be called as a goroutine.
