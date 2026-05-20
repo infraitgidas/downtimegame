@@ -53,13 +53,28 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 if [ "$SSH_MODE" = true ]; then
     info "Modo: SSH REAL (con LXC)"
 
-    # Verificar SSH key
-    SSH_KEY="${LXC_SSH_KEY_PATH:-$HOME/.ssh/id_rsa}"
-    if [ ! -f "$SSH_KEY" ]; then
-        err "No se encuentra la SSH key: $SSH_KEY"
-        err "Exportá LXC_SSH_KEY_PATH o creá la key primero:"
-        err "  ssh-keygen -t rsa -b 4096"
+    # Detectar SSH key automáticamente
+    if [ -n "${LXC_SSH_KEY_PATH:-}" ]; then
+        SSH_KEY="$LXC_SSH_KEY_PATH"
+    else
+        # Buscar cualquier key (ed25519, rsa, ecdsa)
+        for key in id_ed25519 id_rsa id_ecdsa; do
+            if [ -f "$HOME/.ssh/$key" ]; then
+                SSH_KEY="$HOME/.ssh/$key"
+                break
+            fi
+        done
+    fi
+
+    if [ -z "${SSH_KEY:-}" ] || [ ! -f "$SSH_KEY" ]; then
+        err "No se encuentra ninguna SSH key en ~/.ssh/"
+        err ""
+        err "Generá una key y copiala a Proxmox:"
+        err "  ssh-keygen -t ed25519"
         err "  ssh-copy-id root@192.168.1.31"
+        err ""
+        err "O exportá la ruta manualmente:"
+        err "  export LXC_SSH_KEY_PATH=/path/to/tu_key"
         exit 1
     fi
 
