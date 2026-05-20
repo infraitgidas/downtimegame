@@ -14,11 +14,10 @@ COPY package.json ./
 # npm install with workarounds for overlay2 bug + SSL cert fix:
 # - Install ca-certificates: Alpine no incluye CAs, necesario para SSL
 # - --mount=type=cache: BuildKit cache mount, persiste caché entre builds
-#   (baja de 500s a <10s en rebuilds)
-# - NPM_CONFIG_CACHE: apunta el caché al mount point persistente
 # - NODE_OPTIONS=--use-system-ca: a nivel Node.js, fuerza usar CA del sistema
 # - --use-system-ca: a nivel npm, mismo objetivo
-# - --no-optional: reduce package count
+# - NOTA: NO usar --no-optional porque Alpine (musl) necesita
+#   @rollup/rollup-linux-x64-musl como dependencia opcional de rollup v4+
 # - --no-audit --no-fund: skip network checks
 # - --no-package-lock: avoid lockfile format issues
 ENV NODE_OPTIONS="--use-system-ca"
@@ -28,7 +27,7 @@ RUN --mount=type=cache,target=/tmp/.npm \
     update-ca-certificates && \
     npm install \
         --use-system-ca \
-        --no-optional --no-audit --no-fund \
+        --no-audit --no-fund \
         --no-package-lock \
         --loglevel=error
 

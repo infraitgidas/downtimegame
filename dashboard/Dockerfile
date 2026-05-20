@@ -17,7 +17,7 @@ RUN --mount=type=cache,target=/tmp/.npm \
     update-ca-certificates && \
     npm install \
         --use-system-ca \
-        --no-optional --no-audit --no-fund \
+        --no-audit --no-fund \
         --no-package-lock \
         --loglevel=error
 
