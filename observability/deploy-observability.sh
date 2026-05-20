@@ -11,8 +11,8 @@
 #
 # Requisitos:
 #   - SSH key-based auth a root@192.168.1.31 (Proxmox)
-#   - LXC template "rocky-10-standard" disponible en Proxmox
-#     (verificar con: pveam available | grep rocky)
+#   - LXC template rockylinux-10-defaults-20251001.tar.xz disponible en Proxmox
+#     (verificar con: pveam available | grep rockylinux-10)
 #   - Red 192.168.1.0/24 accesible desde el CT
 # =============================================================================
 
@@ -36,9 +36,9 @@ CT_ID=205
 CT_HOSTNAME="sg-monitoring"
 CT_IP="192.168.1.205/24"
 CT_GW="192.168.1.1"
-# Template de Rocky Linux 10 en Proxmox.
-# Verificar nombre exacto con: pveam available | grep rocky-10
-CT_OS="rocky-10-standard"
+# Template de Rocky Linux 10 en Proxmox (mismo que servicios de color).
+# Verificar con: pveam available | grep rockylinux-10-defaults
+CT_OS="rockylinux-10-defaults-20251001.tar.xz"
 CT_STORAGE="local"
 CT_CORES=1
 CT_MEMORY=1024
@@ -165,7 +165,7 @@ else
             --features keyctl=1,nesting=1 \
             --start 1" || {
             err "Fallo al crear CT. Verificá que el template ${CT_OS} exista."
-            err "Comando: pveam available | grep rocky"
+            err "Comando: pveam available | grep rockylinux-10-defaults"
             exit 1
         }
         ok "CT ${CT_ID} creado e iniciado"
