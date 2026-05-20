@@ -53,9 +53,22 @@ SKIP_CREATE=false
 ONLY_DASHBOARD=false
 for arg in "$@"; do
     case "$arg" in
+        -h|--help)
+            echo "Uso: $0 [--skip-create] [--only-dashboard] [-h]"
+            echo ""
+            echo "  --skip-create      Salta creacion del CT y reinstalacion de servicios"
+            echo "  --only-dashboard   Solo actualiza el dashboard de Grafana (CT debe existir)"
+            echo "  -h, --help         Muestra esta ayuda"
+            echo ""
+            echo "Requisitos:"
+            echo "  - SSH key a root@${PROXMOX_HOST}"
+            echo "  - Template '${CT_OS}' en Proxmox"
+            echo ""
+            exit 0
+            ;;
         --skip-create) SKIP_CREATE=true ;;
         --only-dashboard) ONLY_DASHBOARD=true ;;
-        *) err "Argumento desconocido: $arg"; exit 1 ;;
+        *) err "Argumento desconocido: $arg (usa --help para ayuda)"; exit 1 ;;
     esac
 done
 
@@ -103,7 +116,19 @@ ok "Proxmox conectado: $(ssh_proxmox "hostname" 2>/dev/null)"
 
 # ── 1. Create CT (if needed) ──
 if [ "$ONLY_DASHBOARD" = true ]; then
-    info "Modo: solo dashboard. Saltando creacion e instalacion."
+    info "Modo: solo dashboard."
+    info "Verificando CT ${CT_ID}..."
+    if ! ssh_proxmox "pct status ${CT_ID}" >/dev/null 2>&1; then
+        err "CT ${CT_ID} no existe. Primero corre el script sin --only-dashboard."
+        exit 1
+    fi
+    CT_STATUS=$(ssh_proxmox "pct status ${CT_ID}" | awk '{print $2}')
+    if [ "$CT_STATUS" != "running" ]; then
+        info "CT ${CT_ID} está detenido. Iniciando..."
+        ssh_proxmox "pct start ${CT_ID}"
+        sleep 5
+    fi
+    ok "CT ${CT_ID} listo ($(ssh_proxmox "pct status ${CT_ID}" | awk '{print $2}'))"
 elif [ "$SKIP_CREATE" = true ]; then
     info "Saltando creacion del CT (--skip-create)"
     info "Verificando que CT ${CT_ID} existe..."

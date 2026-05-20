@@ -44,6 +44,10 @@ deploy-pc-ssh: ## Deploy to game PC with real LXC/SSH
 	@echo "Deploying to PC (SSH/real mode)..."
 	@./deploy-pc.sh --ssh
 
+deploy-observability: ## Deploy monitoring stack (CT 205, Prometheus, Grafana)
+	@echo "Deploying observability stack..."
+	@./observability/deploy-observability.sh $(ARGS)
+
 docker-down: ## Stop Docker Compose services
 	@echo "Stopping Docker services..."
 	@cd docker && docker compose down

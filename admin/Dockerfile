@@ -11,13 +11,19 @@ WORKDIR /app
 # Copy manifest first for layer caching
 COPY package.json ./
 
-# npm install with workarounds for overlay2 bug:
-# - Set cache to /tmp to avoid overlay2 issues
+# npm install with workarounds for overlay2 bug + SSL cert fix:
+# - Install ca-certificates: Alpine no incluye CAs, necesario para SSL
+# - --mount=type=cache: BuildKit cache mount, persiste caché entre builds
+#   (baja de 500s a <10s en rebuilds)
+# - NPM_CONFIG_CACHE: apunta el caché al mount point persistente
 # - --no-optional: reduce package count
 # - --no-audit --no-fund: skip network checks
 # - --no-package-lock: avoid lockfile format issues
 ENV NPM_CONFIG_CACHE=/tmp/.npm
-RUN npm install --no-optional --no-audit --no-fund --no-package-lock --loglevel=error
+RUN --mount=type=cache,target=/tmp/.npm \
+    apk add --no-cache ca-certificates && \
+    update-ca-certificates && \
+    npm install --no-optional --no-audit --no-fund --no-package-lock --loglevel=error
 
 COPY . .
 RUN npm run build
