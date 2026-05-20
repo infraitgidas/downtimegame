@@ -11,7 +11,8 @@
 #
 # Requisitos:
 #   - SSH key-based auth a root@192.168.1.31 (Proxmox)
-#   - LXC template "debian-12-standard" disponible en Proxmox
+#   - LXC template "rocky-10-standard" disponible en Proxmox
+#     (verificar con: pveam available | grep rocky)
 #   - Red 192.168.1.0/24 accesible desde el CT
 # =============================================================================
 
@@ -35,7 +36,9 @@ CT_ID=205
 CT_HOSTNAME="sg-monitoring"
 CT_IP="192.168.1.205/24"
 CT_GW="192.168.1.1"
-CT_OS="debian-12-standard"
+# Template de Rocky Linux 10 en Proxmox.
+# Verificar nombre exacto con: pveam available | grep rocky-10
+CT_OS="rocky-10-standard"
 CT_STORAGE="local"
 CT_CORES=1
 CT_MEMORY=1024
@@ -162,7 +165,7 @@ else
             --features keyctl=1,nesting=1 \
             --start 1" || {
             err "Fallo al crear CT. Verificá que el template ${CT_OS} exista."
-            err "Comando: pveam available | grep debian-12"
+            err "Comando: pveam available | grep rocky"
             exit 1
         }
         ok "CT ${CT_ID} creado e iniciado"
@@ -180,12 +183,11 @@ else
     ok "CT listo: $(ssh_proxmox "pct exec ${CT_ID} -- hostname" 2>/dev/null)"
 
     # ── 3. Install dependencies inside CT ──
-    info "Paso 3: Instalando dependencias..."
-    pct_exec apt-get update -qq
-    pct_exec apt-get install -y -qq \
-        curl wget gnupg2 software-properties-common \
-        systemd-sysv libcap2-bin \
-        adduser
+    info "Paso 3: Instalando dependencias (dnf)..."
+    pct_exec dnf makecache -q
+    pct_exec dnf install -y -q \
+        curl wget gnupg2 \
+        libcap which
     ok "Dependencias instaladas"
 
     # ── 4. Create system users ──
@@ -330,12 +332,20 @@ SERVICE
     ok "Servicios iniciados"
 
     # ── 11. Install Grafana ──
-    info "Paso 11: Instalando Grafana..."
+    info "Paso 11: Instalando Grafana (repo RPM)..."
     pct_exec bash -c '
-        curl -fsSL https://apt.grafana.com/gpg.key | gpg --dearmor -o /etc/apt/trusted.gpg.d/grafana.gpg
-        echo "deb https://apt.grafana.com stable main" > /etc/apt/sources.list.d/grafana.list
-        apt-get update -qq
-        apt-get install -y -qq grafana
+        cat > /etc/yum.repos.d/grafana.repo << "REPO"
+[grafana]
+name=grafana
+baseurl=https://rpm.grafana.com
+repo_gpgcheck=1
+enabled=1
+gpgcheck=1
+gpgkey=https://rpm.grafana.com/gpg.key
+sslverify=1
+sslcacert=/etc/pki/tls/certs/ca-bundle.crt
+REPO
+        dnf install -y -q grafana
     '
     ok "Grafana instalado"
 
