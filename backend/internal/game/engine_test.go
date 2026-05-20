@@ -103,7 +103,7 @@ func TestStartGame(t *testing.T) {
 
 	game, _ := e.CreateGame("TestPlayer")
 
-	inst, err := e.StartGame(game.ID)
+	inst, err := e.StartGame(game.ID, "")
 	if err != nil {
 		t.Fatalf("StartGame failed: %v", err)
 	}
@@ -140,7 +140,7 @@ func TestStartGame(t *testing.T) {
 func TestStartGame_NotFound(t *testing.T) {
 	e := newTestEngine(t)
 
-	_, err := e.StartGame("nonexistent")
+	_, err := e.StartGame("nonexistent", "")
 	if err == nil {
 		t.Fatal("expected error for nonexistent game, got nil")
 	}
@@ -150,10 +150,10 @@ func TestStartGame_NotPending(t *testing.T) {
 	e := newTestEngine(t)
 
 	game, _ := e.CreateGame("TestPlayer")
-	e.StartGame(game.ID)
+	e.StartGame(game.ID, "")
 
 	// Try starting again
-	_, err := e.StartGame(game.ID)
+	_, err := e.StartGame(game.ID, "")
 	if err == nil {
 		t.Fatal("expected error for already-started game, got nil")
 	}
@@ -163,7 +163,7 @@ func TestResolveIncident(t *testing.T) {
 	e := newTestEngine(t)
 
 	game, _ := e.CreateGame("TestPlayer")
-	e.StartGame(game.ID)
+	e.StartGame(game.ID, "")
 
 	resolvedGame, err := e.ResolveIncident(game.ID)
 	if err != nil {
@@ -207,7 +207,7 @@ func TestResolveIncident_AlreadyResolved(t *testing.T) {
 	e := newTestEngine(t)
 
 	game, _ := e.CreateGame("TestPlayer")
-	e.StartGame(game.ID)
+	e.StartGame(game.ID, "")
 	e.ResolveIncident(game.ID)
 
 	// Try resolving again
@@ -221,7 +221,7 @@ func TestAbandonGame(t *testing.T) {
 	e := newTestEngine(t)
 
 	game, _ := e.CreateGame("TestPlayer")
-	e.StartGame(game.ID)
+	e.StartGame(game.ID, "")
 
 	if err := e.AbandonGame(game.ID); err != nil {
 		t.Fatalf("AbandonGame failed: %v", err)

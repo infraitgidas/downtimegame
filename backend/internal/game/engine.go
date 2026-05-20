@@ -147,7 +147,8 @@ func (e *Engine) CreateGame(playerName string) (*store.Game, error) {
 }
 
 // StartGame begins a game by selecting a random scenario and triggering an incident.
-func (e *Engine) StartGame(gameID string) (*GameInstance, error) {
+// If scenarioID is not empty, uses that specific scenario instead of random selection.
+func (e *Engine) StartGame(gameID string, scenarioID string) (*GameInstance, error) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
@@ -160,10 +161,18 @@ func (e *Engine) StartGame(gameID string) (*GameInstance, error) {
 		return nil, fmt.Errorf("game %s is not pending (status: %s)", gameID, game.Status)
 	}
 
-	// Pick a random scenario
-	scenario := e.pickRandomScenario()
-	if scenario == nil {
-		return nil, fmt.Errorf("no scenarios available")
+	// Pick a scenario (specific or random)
+	var scenario *Scenario
+	if scenarioID != "" {
+		scenario = GetScenarioByID(scenarioID)
+		if scenario == nil {
+			return nil, fmt.Errorf("scenario not found: %s", scenarioID)
+		}
+	} else {
+		scenario = e.pickRandomScenario()
+		if scenario == nil {
+			return nil, fmt.Errorf("no scenarios available")
+		}
 	}
 
 	// Activate game
@@ -419,7 +428,78 @@ func (e *Engine) handleTimeout(gameID string) {
 	log.Printf("Game timed out: %s (limit: %ds)", gameID, inst.Scenario.TimeLimit)
 }
 
-// broadcastEvent sends a typed event through the WebSocket hub.
+// GetScenarioForGame returns the scenario associated with an active game.
+func (e *Engine) GetScenarioForGame(gameID string) *Scenario {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	inst, ok := e.activeGames[gameID]
+	if !ok {
+		return nil
+	}
+	return inst.Scenario
+}
+
+// DeleteGame removes a game that is not currently active.
+func (e *Engine) DeleteGame(gameID string) error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	if _, ok := e.activeGames[gameID]; ok {
+		return fmt.Errorf("cannot delete active game: %s", gameID)
+	}
+
+	return e.store.DeleteGame(gameID)
+}
+
+// AdminReset abandons all active games and restores all services to healthy state.
+func (e *Engine) AdminReset() error {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	// Collect active games to abandon
+	var toAbandon []*GameInstance
+	for _, inst := range e.activeGames {
+		toAbandon = append(toAbandon, inst)
+	}
+
+	for _, inst := range toAbandon {
+		// Restore service via executor
+		if err := e.executor.Resolve(inst.Scenario); err != nil {
+			log.Printf("AdminReset: executor resolve error for %s: %v", inst.Game.ID, err)
+		}
+
+		// Update store
+		if err := e.store.UpdateGameStatus(inst.Game.ID, StatusAbandoned); err != nil {
+			log.Printf("AdminReset: store error for %s: %v", inst.Game.ID, err)
+		}
+
+		// Restore in-memory service status
+		if e.serviceStatus[inst.Scenario.TargetServiceID] != nil {
+			e.serviceStatus[inst.Scenario.TargetServiceID].Online = true
+			e.serviceStatus[inst.Scenario.TargetServiceID].Incident = false
+		}
+
+		// Stop timer
+		close(inst.TimerDone)
+
+		// Broadcast
+		e.broadcastEvent(EventGameAbandoned, map[string]any{
+			"game": inst.Game,
+		})
+		e.broadcastEvent(EventServiceStatus, map[string]any{
+			"service_id": inst.Scenario.TargetServiceID,
+			"online":     true,
+			"incident":   false,
+		})
+
+		log.Printf("AdminReset: game %s abandoned (service %s restored)", inst.Game.ID, inst.Scenario.TargetServiceID)
+	}
+
+	// Clear all active games
+	e.activeGames = make(map[string]*GameInstance)
+
+	return nil
+}
 func (e *Engine) broadcastEvent(eventType string, payload map[string]any) {
 	msg := hub.Message{
 		Type:    eventType,

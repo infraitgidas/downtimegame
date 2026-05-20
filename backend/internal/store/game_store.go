@@ -2,6 +2,7 @@ package store
 
 import (
 	"database/sql"
+	"fmt"
 	"time"
 )
 
@@ -131,6 +132,71 @@ func (s *Store) UpdateGameStatus(id, status string) error {
 func (s *Store) UpdateGameScore(id string, score int) error {
 	_, err := s.DB.Exec(`UPDATE games SET score = ? WHERE id = ?`, score, id)
 	return err
+}
+
+// DeleteGame removes a game and its incidents from the database.
+// Only allowed for non-active games.
+func (s *Store) DeleteGame(id string) error {
+	tx, err := s.DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	// Check game exists and is not active
+	var status string
+	err = tx.QueryRow(`SELECT status FROM games WHERE id = ?`, id).Scan(&status)
+	if err != nil {
+		return err
+	}
+	if status == "active" {
+		return fmt.Errorf("cannot delete active game: %s", id)
+	}
+
+	// Delete incidents first (FK constraint)
+	if _, err := tx.Exec(`DELETE FROM incidents WHERE game_id = ?`, id); err != nil {
+		return err
+	}
+	// Delete game
+	if _, err := tx.Exec(`DELETE FROM games WHERE id = ?`, id); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}
+
+// ListActiveGames returns all games with status 'active'.
+func (s *Store) ListActiveGames() ([]*Game, error) {
+	rows, err := s.DB.Query(
+		`SELECT id, player_name, status, score, started_at, ended_at, created_at FROM games WHERE status = 'active' ORDER BY created_at DESC`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var games []*Game
+	for rows.Next() {
+		g := &Game{}
+		var createdAt, startedAt, endedAt sql.NullString
+		if err := rows.Scan(&g.ID, &g.PlayerName, &g.Status, &g.Score, &startedAt, &endedAt, &createdAt); err != nil {
+			return nil, err
+		}
+		if createdAt.Valid {
+			t, _ := time.Parse(time.RFC3339Nano, createdAt.String)
+			g.CreatedAt = t
+		}
+		if startedAt.Valid {
+			t, _ := time.Parse(time.RFC3339Nano, startedAt.String)
+			g.StartedAt = &t
+		}
+		if endedAt.Valid {
+			t, _ := time.Parse(time.RFC3339Nano, endedAt.String)
+			g.EndedAt = &t
+		}
+		games = append(games, g)
+	}
+	return games, rows.Err()
 }
 
 // Incident represents a downtime incident within a game.

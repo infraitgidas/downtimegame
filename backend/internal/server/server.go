@@ -62,11 +62,16 @@ func New(gameHub *hub.Hub, gameEngine *game.Engine, dataStore *store.Store) *Ser
 		r.Post("/games/{id}/start", s.handleStartGame)
 		r.Post("/games/{id}/resolve", s.handleResolveIncident)
 		r.Post("/games/{id}/abandon", s.handleAbandonGame)
+		r.Delete("/games/{id}", s.handleDeleteGame)
+		r.Get("/games/{id}/solution", s.handleGameSolution)
 
 		r.Get("/scenarios", s.handleListScenarios)
 		r.Get("/services", s.handleListServices)
 		r.Get("/services/status", s.handleServiceStatus)
 		r.Get("/leaderboard", s.handleLeaderboard)
+
+		// Admin operations
+		r.Post("/admin/reset", s.handleAdminReset)
 	})
 
 	// Register WebSocket message handlers (admin commands)
@@ -96,13 +101,14 @@ func (s *Server) registerWSHandlers() {
 
 	s.Hub.Router.Handle("start_game", func(client *hub.Client, msg hub.Message) {
 		var payload struct {
-			GameID string `json:"game_id"`
+			GameID     string `json:"game_id"`
+			ScenarioID string `json:"scenario_id,omitempty"`
 		}
 		if err := json.Unmarshal(msg.Payload, &payload); err != nil {
 			log.Printf("WS start_game: invalid payload: %v", err)
 			return
 		}
-		inst, err := s.Engine.StartGame(payload.GameID)
+		inst, err := s.Engine.StartGame(payload.GameID, payload.ScenarioID)
 		if err != nil {
 			log.Printf("WS start_game error: %v", err)
 			return
@@ -216,9 +222,23 @@ func (s *Server) handleGetGame(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, game)
 }
 
+type startGameRequest struct {
+	ScenarioID string `json:"scenario_id,omitempty"`
+}
+
 func (s *Server) handleStartGame(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
-	inst, err := s.Engine.StartGame(id)
+
+	// Optional scenario_id in body
+	scenarioID := ""
+	if r.Body != nil {
+		var req startGameRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
+			scenarioID = req.ScenarioID
+		}
+	}
+
+	inst, err := s.Engine.StartGame(id, scenarioID)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
@@ -285,6 +305,50 @@ func (s *Server) handleLeaderboard(w http.ResponseWriter, r *http.Request) {
 		entries = []*store.LeaderboardEntry{}
 	}
 	writeJSON(w, http.StatusOK, entries)
+}
+
+// ── Delete Game ──────────────────────────────────────────────────────────────
+
+func (s *Server) handleDeleteGame(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	if err := s.Engine.DeleteGame(id); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
+}
+
+// ── Game Solution ────────────────────────────────────────────────────────────
+
+func (s *Server) handleGameSolution(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	scenario := s.Engine.GetScenarioForGame(id)
+	if scenario == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "no active game or scenario not found"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"scenario_id":  scenario.ID,
+		"name":         scenario.Name,
+		"description":  scenario.Description,
+		"fix_hint":     scenario.FixHint,
+		"hints":        scenario.Hints,
+		"difficulty":   scenario.Difficulty,
+		"time_limit":   scenario.TimeLimit,
+	})
+}
+
+// ── Admin Reset ──────────────────────────────────────────────────────────────
+
+func (s *Server) handleAdminReset(w http.ResponseWriter, r *http.Request) {
+	if err := s.Engine.AdminReset(); err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":   "reset_completed",
+		"services": s.Engine.GetServiceStatuses(),
+	})
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
