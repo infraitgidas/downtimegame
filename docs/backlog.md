@@ -150,6 +150,38 @@
 
 ---
 
+## Fase 4: Observabilidad con Grafana + Prometheus 🔄
+
+> CT 205 (sg-monitoring, 192.168.1.205)
+
+### 4.1 Stack de Monitoreo ✅
+- [x] Prometheus v3.2.1 — time-series DB y scraper
+- [x] Node Exporter v1.8.2 — métricas del sistema
+- [x] Blackbox Exporter v0.25 — probing HTTP + ICMP
+- [x] Grafana v11 — dashboards profesionales
+- [x] Dashboard JSON con 16 paneles en 6 secciones
+
+### 4.2 Targets Configurados ✅
+- [x] 4 servicios HTTP de juego (rojo, azul, verde, amarillo)
+- [x] Backend API, Dashboard, Admin Panel
+- [x] ICMP ping a Router, Proxmox, Game PC, Internet, cada LXC
+
+### 4.3 Deploy Script ✅
+- [x] `deploy-observability.sh` — crea CT 205 e instala todo
+- [x] Flags: --skip-create, --only-dashboard
+- [x] Grafana provisioning automático (datasource + dashboard)
+
+### 4.4 Dashboard Features
+- [x] Service health overview (stat panels por color)
+- [x] HTTP latency time-series (ms)
+- [x] Service availability %
+- [x] ICMP ping latency (router, proxmox, pc, internet)
+- [x] Network reachability + packet loss
+- [x] System: CPU, RAM, Disk gauges
+- [x] System: Load average, Network I/O
+
+---
+
 ## Fase 5: Testing, pulido, deploy en feria ⏳
 
 - [ ] Tests de integración del backend (WebSocket + HTTP)
