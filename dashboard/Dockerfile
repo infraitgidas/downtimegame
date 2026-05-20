@@ -14,7 +14,11 @@ ENV NPM_CONFIG_CACHE=/tmp/.npm
 RUN --mount=type=cache,target=/tmp/.npm \
     apk add --no-cache ca-certificates && \
     update-ca-certificates && \
-    npm install --no-optional --no-audit --no-fund --no-package-lock --loglevel=error
+    npm install \
+        --use-system-ca \
+        --no-optional --no-audit --no-fund \
+        --no-package-lock \
+        --loglevel=error
 
 COPY . .
 RUN npm run build
