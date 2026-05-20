@@ -16,11 +16,12 @@ COPY package.json ./
 # - --mount=type=cache: BuildKit cache mount, persiste caché entre builds
 #   (baja de 500s a <10s en rebuilds)
 # - NPM_CONFIG_CACHE: apunta el caché al mount point persistente
-# - --use-system-ca: usa las CAs del sistema (Alpine), no el bundle propio de npm.
-#   Sin esto, npm ignora ca-certificates aunque esté instalado.
+# - NODE_OPTIONS=--use-system-ca: a nivel Node.js, fuerza usar CA del sistema
+# - --use-system-ca: a nivel npm, mismo objetivo
 # - --no-optional: reduce package count
 # - --no-audit --no-fund: skip network checks
 # - --no-package-lock: avoid lockfile format issues
+ENV NODE_OPTIONS="--use-system-ca"
 ENV NPM_CONFIG_CACHE=/tmp/.npm
 RUN --mount=type=cache,target=/tmp/.npm \
     apk add --no-cache ca-certificates && \

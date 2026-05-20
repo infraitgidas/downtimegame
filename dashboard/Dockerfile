@@ -10,6 +10,7 @@ WORKDIR /app
 
 COPY package.json ./
 
+ENV NODE_OPTIONS="--use-system-ca"
 ENV NPM_CONFIG_CACHE=/tmp/.npm
 RUN --mount=type=cache,target=/tmp/.npm \
     apk add --no-cache ca-certificates && \
