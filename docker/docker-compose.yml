@@ -26,6 +26,8 @@ services:
       - PORT=8080
       - DB_PATH=/data/downtime-game.db
       - EXECUTOR_MODE=${EXECUTOR_MODE:-simulated}
+      - CHECKER_INTERVAL=${CHECKER_INTERVAL:-5}
+      - CHECKER_TIMEOUT=${CHECKER_TIMEOUT:-3}
       - LXC_SSH_HOST=${LXC_SSH_HOST:-192.168.1.31}
       - LXC_SSH_USER=${LXC_SSH_USER:-root}
       - LXC_SSH_PORT=${LXC_SSH_PORT:-22}

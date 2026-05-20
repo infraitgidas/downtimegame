@@ -99,19 +99,33 @@ func (e *Engine) setServiceStatus(serviceID string, online bool, incident bool) 
 // SetServiceStatusFromChecker is called by the health checker (external goroutine)
 // when a real service transitions between online/offline.
 // It acquires the write lock internally.
+//
+// During an active incident, only Online=false updates from the checker are
+// accepted. This prevents the checker from racing ahead of executor.Trigger
+// and marking a service as online before the failure fully takes effect.
+// The engine's own ResolveIncident/AbandonGame/Timeout paths are the sole
+// authorities for clearing Online=true when an incident is resolved.
 func (e *Engine) SetServiceStatusFromChecker(serviceID string, online bool) {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	if e.serviceStatus[serviceID] != nil {
-		e.serviceStatus[serviceID].Online = online
-		// Don't clear incident flag — that's game-managed
+	svc, ok := e.serviceStatus[serviceID]
+	if !ok {
+		return
 	}
+
+	// During an active incident, don't let the checker mark the service as
+	// online — resolution is game-managed.
+	if online && svc.Incident {
+		return
+	}
+
+	svc.Online = online
 
 	e.broadcastEvent(EventServiceStatus, map[string]any{
 		"service_id": serviceID,
 		"online":     online,
-		"incident":   e.serviceStatus[serviceID] != nil && e.serviceStatus[serviceID].Incident,
+		"incident":   svc.Incident,
 	})
 }
 
