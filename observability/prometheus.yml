@@ -1,0 +1,71 @@
+# =============================================================================
+# Prometheus Configuration — Downtime Game Observability
+# Targets: Node Exporter (system), Blackbox Exporter (HTTP/ICMP probes)
+# =============================================================================
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: downtime-game
+
+# Alerting (placeholder — no alertmanager configured yet)
+alerting:
+  alertmanagers: []
+
+# Rule files (placeholder — no rules yet)
+rule_files: []
+
+scrape_configs:
+  # ── Node Exporter: system metrics from the monitoring LXC ──
+  - job_name: "node"
+    static_configs:
+      - targets: ["localhost:9100"]
+        labels:
+          host: sg-monitoring
+
+  # ── Blackbox Exporter: HTTP probes to services ──
+  - job_name: "blackbox-http"
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - http://192.168.1.200:8080/health   # sg-rojo
+          - http://192.168.1.204:8084/health   # sg-azul
+          - http://192.168.1.202:8082/health   # sg-verde
+          - http://192.168.1.203:8083/health   # sg-amarillo
+          - http://192.168.1.54:8080/health    # Backend API
+          - http://192.168.1.54:80/            # Dashboard
+          - http://192.168.1.54:80/admin/      # Admin Panel
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: localhost:9115
+
+  # ── Blackbox Exporter: ICMP ping probes ──
+  - job_name: "blackbox-icmp"
+    metrics_path: /probe
+    params:
+      module: [icmp]
+    static_configs:
+      - targets:
+          - 192.168.1.1     # Router
+          - 192.168.1.31    # Proxmox host
+          - 192.168.1.54    # Game PC
+          - 8.8.8.8         # Internet (Google DNS)
+          - 192.168.1.200   # sg-rojo LXC
+          - 192.168.1.204   # sg-azul LXC
+          - 192.168.1.202   # sg-verde LXC
+          - 192.168.1.203   # sg-amarillo LXC
+          - 192.168.1.205   # sg-monitoring LXC (self)
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: localhost:9115

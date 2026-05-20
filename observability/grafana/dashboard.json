@@ -1,0 +1,1034 @@
+{
+  "__inputs": [],
+  "__requires": [],
+  "title": "Downtime Game — Observability",
+  "description": "Monitoreo profesional de todos los componentes del Downtime Game: servicios HTTP, infraestructura de red, sistema y métricas del juego",
+  "tags": ["downtime-game", "observability", "production"],
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "10s",
+  "time": {
+    "from": "now-15m",
+    "to": "now"
+  },
+  "timepicker": {
+    "refresh_intervals": ["5s", "10s", "30s", "1m", "5m", "15m", "30m", "1h"],
+    "time_options": ["5m", "15m", "1h", "6h", "12h", "24h", "2d", "7d", "30d"]
+  },
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "style": "dark",
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "System Overview",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "collapsed": false
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "System Health",
+      "description": "Overall system status based on all HTTP probe targets",
+      "gridPos": { "h": 3, "w": 8, "x": 0, "y": 1 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "green", "value": 1 }
+            ]
+          },
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "⚠️ DEGRADED", "color": "red" },
+                "1": { "text": "✅ ALL SYSTEMS OK", "color": "green" }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "count(count by (instance) (probe_success{job=\"blackbox-http\"}) == 1)",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "pluginVersion": "11.0.0"
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Monitoring Uptime",
+      "description": "Uptime of the monitoring LXC (CT 205)",
+      "gridPos": { "h": 3, "w": 8, "x": 8, "y": 1 },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "seconds",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null }
+            ]
+          },
+          "color": { "mode": "none" },
+          "decimals": 0,
+          "mappings": []
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "(node_time_seconds{host=\"sg-monitoring\"} - node_boot_time_seconds{host=\"sg-monitoring\"})",
+          "legendFormat": "Uptime",
+          "refId": "A"
+        }
+      ],
+      "pluginVersion": "11.0.0"
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Endpoints Status",
+      "description": "Total HTTP endpoints and how many are healthy",
+      "gridPos": { "h": 3, "w": 8, "x": 16, "y": 1 },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["lastNotNull"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 5 },
+              { "color": "green", "value": 7 }
+            ]
+          },
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "7": { "text": "7/7 ✅" },
+                "6": { "text": "6/7 ⚠️" },
+                "5": { "text": "5/7 ⚠️" }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "count(probe_success{job=\"blackbox-http\"} == 1)",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "pluginVersion": "11.0.0"
+    },
+
+    {
+      "id": 5,
+      "type": "row",
+      "title": "Game Services",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 4 },
+      "collapsed": false
+    },
+
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "sg-rojo",
+      "description": "Servicio Rojo — HTTP health check",
+      "gridPos": { "h": 3, "w": 4, "x": 0, "y": 5 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "#DC143C", "value": 1 }
+            ]
+          },
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "🔴 DOWN", "color": "red" },
+                "1": { "text": "🟢 ONLINE", "color": "#DC143C" }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "probe_success{instance=\"http://192.168.1.200:8080/health\"}",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "sg-azul",
+      "description": "Servicio Azul — HTTP health check",
+      "gridPos": { "h": 3, "w": 4, "x": 4, "y": 5 },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "#1E90FF", "value": 1 }
+            ]
+          },
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "🔴 DOWN", "color": "red" },
+                "1": { "text": "🔵 ONLINE", "color": "#1E90FF" }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "probe_success{instance=\"http://192.168.1.204:8084/health\"}",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "stat",
+      "title": "sg-verde",
+      "description": "Servicio Verde — HTTP health check",
+      "gridPos": { "h": 3, "w": 4, "x": 8, "y": 5 },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "#00FF7F", "value": 1 }
+            ]
+          },
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "🔴 DOWN", "color": "red" },
+                "1": { "text": "🟢 ONLINE", "color": "#00FF7F" }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "probe_success{instance=\"http://192.168.1.202:8082/health\"}",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "stat",
+      "title": "sg-amarillo",
+      "description": "Servicio Amarillo — HTTP health check",
+      "gridPos": { "h": 3, "w": 4, "x": 12, "y": 5 },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "#FFD700", "value": 1 }
+            ]
+          },
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "🔴 DOWN", "color": "red" },
+                "1": { "text": "🟡 ONLINE", "color": "#FFD700" }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "probe_success{instance=\"http://192.168.1.203:8083/health\"}",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 10,
+      "type": "stat",
+      "title": "Backend API",
+      "description": "Backend Go API health endpoint",
+      "gridPos": { "h": 3, "w": 4, "x": 16, "y": 5 },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "purple", "value": 1 }
+            ]
+          },
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "🔴 DOWN", "color": "red" },
+                "1": { "text": "💜 ONLINE", "color": "purple" }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "probe_success{instance=\"http://192.168.1.54:8080/health\"}",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "type": "stat",
+      "title": "Web Apps",
+      "description": "Dashboard + Admin Panel HTTP status",
+      "gridPos": { "h": 3, "w": 4, "x": 20, "y": 5 },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 1 },
+              { "color": "green", "value": 2 }
+            ]
+          },
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "🔴 ALL DOWN", "color": "red" },
+                "1": { "text": "⚠️ PARTIAL", "color": "orange" },
+                "2": { "text": "✅ ALL OK", "color": "green" }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "count(probe_success{instance=~\"http://192.168.1.54:80.*\"} == 1)",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 12,
+      "type": "timeseries",
+      "title": "HTTP Response Time (ms)",
+      "description": "Latencia de respuesta HTTP de cada servicio del juego",
+      "gridPos": { "h": 6, "w": 16, "x": 0, "y": 8 },
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["last", "mean", "max"]
+        },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "min": 0,
+          "decimals": 0,
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "spanNulls": true,
+            "showPoints": "never",
+            "pointSize": 3
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "sg-rojo" },
+            "properties": [{ "id": "color", "value": { "fixed": "#DC143C" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "sg-azul" },
+            "properties": [{ "id": "color", "value": { "fixed": "#1E90FF" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "sg-verde" },
+            "properties": [{ "id": "color", "value": { "fixed": "#00FF7F" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "sg-amarillo" },
+            "properties": [{ "id": "color", "value": { "fixed": "#FFD700" } }]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "expr": "probe_http_duration_seconds{instance=\"http://192.168.1.200:8080/health\"} * 1000",
+          "legendFormat": "sg-rojo",
+          "refId": "A"
+        },
+        {
+          "expr": "probe_http_duration_seconds{instance=\"http://192.168.1.204:8084/health\"} * 1000",
+          "legendFormat": "sg-azul",
+          "refId": "B"
+        },
+        {
+          "expr": "probe_http_duration_seconds{instance=\"http://192.168.1.202:8082/health\"} * 1000",
+          "legendFormat": "sg-verde",
+          "refId": "C"
+        },
+        {
+          "expr": "probe_http_duration_seconds{instance=\"http://192.168.1.203:8083/health\"} * 1000",
+          "legendFormat": "sg-amarillo",
+          "refId": "D"
+        }
+      ]
+    },
+    {
+      "id": 13,
+      "type": "timeseries",
+      "title": "Service Availability (%)",
+      "description": "HTTP availability percentage over time for each service",
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 8 },
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": { "mode": "multi" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "decimals": 1,
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "lineInterpolation": "linear",
+            "lineWidth": 2,
+            "fillOpacity": 20,
+            "gradientMode": "opacity",
+            "spanNulls": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "sg-rojo" },
+            "properties": [{ "id": "color", "value": { "fixed": "#DC143C" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "sg-azul" },
+            "properties": [{ "id": "color", "value": { "fixed": "#1E90FF" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "sg-verde" },
+            "properties": [{ "id": "color", "value": { "fixed": "#00FF7F" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "sg-amarillo" },
+            "properties": [{ "id": "color", "value": { "fixed": "#FFD700" } }]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "expr": "avg_over_time(probe_success{instance=\"http://192.168.1.200:8080/health\"}[5m]) * 100",
+          "legendFormat": "sg-rojo",
+          "refId": "A"
+        },
+        {
+          "expr": "avg_over_time(probe_success{instance=\"http://192.168.1.204:8084/health\"}[5m]) * 100",
+          "legendFormat": "sg-azul",
+          "refId": "B"
+        },
+        {
+          "expr": "avg_over_time(probe_success{instance=\"http://192.168.1.202:8082/health\"}[5m]) * 100",
+          "legendFormat": "sg-verde",
+          "refId": "C"
+        },
+        {
+          "expr": "avg_over_time(probe_success{instance=\"http://192.168.1.203:8083/health\"}[5m]) * 100",
+          "legendFormat": "sg-amarillo",
+          "refId": "D"
+        }
+      ]
+    },
+
+    {
+      "id": 14,
+      "type": "row",
+      "title": "Network Infrastructure",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 14 },
+      "collapsed": false
+    },
+
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "ICMP Ping Latency (ms)",
+      "description": "Round-trip ping time to Router, Proxmox, Game PC, and Internet",
+      "gridPos": { "h": 6, "w": 16, "x": 0, "y": 15 },
+      "options": {
+        "legend": {
+          "showLegend": true,
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": ["last", "mean", "min", "max"]
+        },
+        "tooltip": { "mode": "multi", "sort": "asc" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "min": 0,
+          "decimals": 0,
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "gradientMode": "none",
+            "spanNulls": true,
+            "showPoints": "never"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Router (192.168.1.1)" },
+            "properties": [{ "id": "color", "value": { "fixed": "#FF8C00" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Proxmox (192.168.1.31)" },
+            "properties": [{ "id": "color", "value": { "fixed": "#9370DB" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Game PC (192.168.1.54)" },
+            "properties": [{ "id": "color", "value": { "fixed": "#00CED1" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Internet (8.8.8.8)" },
+            "properties": [{ "id": "color", "value": { "fixed": "#32CD32" } }]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "expr": "probe_icmp_duration_seconds{instance=\"192.168.1.1\"} * 1000",
+          "legendFormat": "Router (192.168.1.1)",
+          "refId": "A"
+        },
+        {
+          "expr": "probe_icmp_duration_seconds{instance=\"192.168.1.31\"} * 1000",
+          "legendFormat": "Proxmox (192.168.1.31)",
+          "refId": "B"
+        },
+        {
+          "expr": "probe_icmp_duration_seconds{instance=\"192.168.1.54\"} * 1000",
+          "legendFormat": "Game PC (192.168.1.54)",
+          "refId": "C"
+        },
+        {
+          "expr": "probe_icmp_duration_seconds{instance=\"8.8.8.8\"} * 1000",
+          "legendFormat": "Internet (8.8.8.8)",
+          "refId": "D"
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "type": "stat",
+      "title": "Network Reachability",
+      "description": "ICMP ping reachability count",
+      "gridPos": { "h": 3, "w": 4, "x": 16, "y": 15 },
+      "options": {
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "orange", "value": 7 },
+              { "color": "green", "value": 9 }
+            ]
+          },
+          "color": { "mode": "thresholds" },
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "9": { "text": "9/9 ✅ All Reachable" },
+                "8": { "text": "8/9 ⚠️" },
+                "7": { "text": "7/9 ⚠️" }
+              }
+            }
+          ]
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "count(probe_success{job=\"blackbox-icmp\"} == 1)",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "type": "timeseries",
+      "title": "ICMP Packet Loss",
+      "description": "Packet loss detected via failed probes over time",
+      "gridPos": { "h": 3, "w": 4, "x": 20, "y": 15 },
+      "options": {
+        "legend": { "showLegend": false },
+        "tooltip": { "mode": "single" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "min": 0,
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 30,
+            "gradientMode": "opacity",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "count(probe_success{job=\"blackbox-icmp\"} == 0) or vector(0)",
+          "legendFormat": "Failed Pings",
+          "refId": "A"
+        }
+      ]
+    },
+
+    {
+      "id": 18,
+      "type": "row",
+      "title": "System Resources",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 },
+      "collapsed": false
+    },
+
+    {
+      "id": 19,
+      "type": "gauge",
+      "title": "CPU Usage",
+      "description": "CPU usage percentage on the monitoring LXC",
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 19 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 60 },
+              { "color": "red", "value": 85 }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "100 - (avg by(instance)(rate(node_cpu_seconds_total{host=\"sg-monitoring\",mode=\"idle\"}[1m])) * 100)",
+          "legendFormat": "CPU",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "type": "gauge",
+      "title": "RAM Usage",
+      "description": "Memory usage on the monitoring LXC",
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 19 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 70 },
+              { "color": "red", "value": 85 }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "100 * (1 - node_memory_MemAvailable_bytes{host=\"sg-monitoring\"} / node_memory_MemTotal_bytes{host=\"sg-monitoring\"})",
+          "legendFormat": "RAM",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "type": "gauge",
+      "title": "Disk Usage",
+      "description": "Disk usage on the monitoring LXC root filesystem",
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 19 },
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 75 },
+              { "color": "red", "value": 90 }
+            ]
+          },
+          "color": { "mode": "thresholds" }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "100 * (1 - node_filesystem_avail_bytes{host=\"sg-monitoring\",mountpoint=\"/\",fstype!=\"\"} / node_filesystem_size_bytes{host=\"sg-monitoring\",mountpoint=\"/\",fstype!=\"\"})",
+          "legendFormat": "Disk",
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 22,
+      "type": "stat",
+      "title": "Load Average",
+      "description": "System load average (1m, 5m, 15m)",
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 19 },
+      "options": {
+        "colorMode": "none",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "auto",
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "decimals": 2,
+          "color": { "mode": "palette-classic" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "orange", "value": 2 },
+              { "color": "red", "value": 4 }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "node_load1{host=\"sg-monitoring\"}",
+          "legendFormat": "1m",
+          "refId": "A"
+        },
+        {
+          "expr": "node_load5{host=\"sg-monitoring\"}",
+          "legendFormat": "5m",
+          "refId": "B"
+        },
+        {
+          "expr": "node_load15{host=\"sg-monitoring\"}",
+          "legendFormat": "15m",
+          "refId": "C"
+        }
+      ]
+    },
+
+    {
+      "id": 23,
+      "type": "timeseries",
+      "title": "CPU & Memory Over Time",
+      "description": "Historical CPU and memory usage",
+      "gridPos": { "h": 5, "w": 12, "x": 0, "y": 23 },
+      "options": {
+        "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "decimals": 1,
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "lineInterpolation": "smooth",
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "gradientMode": "opacity",
+            "spanNulls": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "CPU" },
+            "properties": [{ "id": "color", "value": { "fixed": "#FF6B6B" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "RAM" },
+            "properties": [{ "id": "color", "value": { "fixed": "#4ECDC4" } }]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "expr": "100 - (avg by(instance)(rate(node_cpu_seconds_total{host=\"sg-monitoring\",mode=\"idle\"}[1m])) * 100)",
+          "legendFormat": "CPU",
+          "refId": "A"
+        },
+        {
+          "expr": "100 * (1 - node_memory_MemAvailable_bytes{host=\"sg-monitoring\"} / node_memory_MemTotal_bytes{host=\"sg-monitoring\"})",
+          "legendFormat": "RAM",
+          "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "type": "timeseries",
+      "title": "Network I/O (bytes/s)",
+      "description": "Network throughput on the monitoring LXC",
+      "gridPos": { "h": 5, "w": 12, "x": 12, "y": 23 },
+      "options": {
+        "legend": { "showLegend": true, "displayMode": "list", "placement": "bottom" },
+        "tooltip": { "mode": "multi" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "min": 0,
+          "decimals": 0,
+          "color": { "mode": "palette-classic" },
+          "custom": {
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "fillOpacity": 15,
+            "gradientMode": "opacity",
+            "spanNulls": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Received" },
+            "properties": [{ "id": "color", "value": { "fixed": "#00FF7F" } }]
+          },
+          {
+            "matcher": { "id": "byName", "options": "Transmitted" },
+            "properties": [{ "id": "color", "value": { "fixed": "#1E90FF" } }]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "expr": "rate(node_network_receive_bytes_total{host=\"sg-monitoring\",device!=\"lo\"}[1m])",
+          "legendFormat": "Received",
+          "refId": "A"
+        },
+        {
+          "expr": "rate(node_network_transmit_bytes_total{host=\"sg-monitoring\",device!=\"lo\"}[1m])",
+          "legendFormat": "Transmitted",
+          "refId": "B"
+        }
+      ]
+    }
+  ]
+}
