@@ -7,8 +7,17 @@
 FROM node:24-alpine AS builder
 
 WORKDIR /app
-COPY package.json package-lock.json ./
-RUN npm install
+
+# Copy manifest first for layer caching
+COPY package.json ./
+
+# npm install with workarounds for overlay2 bug:
+# - Set cache to /tmp to avoid overlay2 issues
+# - --no-optional: reduce package count
+# - --no-audit --no-fund: skip network checks
+# - --no-package-lock: avoid lockfile format issues
+ENV NPM_CONFIG_CACHE=/tmp/.npm
+RUN npm install --no-optional --no-audit --no-fund --no-package-lock --loglevel=error
 
 COPY . .
 RUN npm run build
