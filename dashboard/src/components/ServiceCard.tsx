@@ -10,6 +10,8 @@ interface Service {
 
 interface ServiceCardProps {
   service: Service;
+  hasIncident?: boolean;
+  isAffected?: boolean;
 }
 
 interface HealthData {
@@ -20,7 +22,7 @@ interface HealthData {
   uptime_seconds: number;
 }
 
-function ServiceCard({ service }: ServiceCardProps) {
+function ServiceCard({ service, hasIncident = false, isAffected = false }: ServiceCardProps) {
   const [health, setHealth] = useState<HealthData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -45,21 +47,46 @@ function ServiceCard({ service }: ServiceCardProps) {
 
   const isOnline = health?.status === "ok";
 
+  // Determine border color and status
+  let borderColor = service.color;
+  let statusText = isOnline ? "ONLINE" : "OFFLINE";
+  let statusColor = isOnline ? service.color : "#FF4444";
+  let statusDetail = isOnline ? "Saludable" : "Caído";
+
+  if (hasIncident && isAffected) {
+    borderColor = "#FF0044";
+    statusText = "🚨 INCIDENTE";
+    statusColor = "#FF0044";
+    statusDetail = "Servicio afectado";
+  } else if (hasIncident) {
+    // Incident on another service — this one might be fine
+  }
+
   return (
     <div
       style={{
         ...styles.card,
-        borderColor: isOnline ? service.color : "#FF4444",
-        boxShadow: isOnline
+        borderColor,
+        boxShadow: hasIncident && isAffected
+          ? `0 0 40px rgba(255,0,68,0.3), inset 0 0 40px rgba(255,0,68,0.1)`
+          : isOnline
           ? `0 0 20px ${service.color}22`
           : "0 0 20px rgba(255,68,68,0.2)",
       }}
     >
       <div style={styles.header}>
-        <span style={{ ...styles.dot, background: isOnline ? service.color : "#FF4444" }} />
+        <span
+          style={{
+            ...styles.dot,
+            background: hasIncident && isAffected ? "#FF0044" : isOnline ? service.color : "#FF4444",
+            boxShadow: hasIncident && isAffected
+              ? "0 0 12px #FF0044, 0 0 24px #FF004488"
+              : `0 0 8px currentColor`,
+          }}
+        />
         <span style={styles.name}>{service.name}</span>
-        <span style={{ ...styles.status, color: isOnline ? service.color : "#FF4444" }}>
-          {isOnline ? "ONLINE" : "OFFLINE"}
+        <span style={{ ...styles.status, color: statusColor }}>
+          {statusText}
         </span>
       </div>
 
@@ -82,15 +109,26 @@ function ServiceCard({ service }: ServiceCardProps) {
             </div>
             <div style={styles.item}>
               <div style={styles.label}>Estado</div>
-              <div style={{ ...styles.value, color: isOnline ? service.color : "#FF4444" }}>
-                {isOnline ? "Saludable" : "Caído"}
+              <div style={{ ...styles.value, color: statusColor }}>
+                {statusDetail}
               </div>
             </div>
           </>
         )}
       </div>
 
-      {error && <div style={styles.error}>{error}</div>}
+      {error && (
+        <div style={styles.error}>
+          <div style={styles.errorLabel}>Error de conexión</div>
+          {error}
+        </div>
+      )}
+
+      {hasIncident && isAffected && (
+        <div style={styles.incidentBanner}>
+          ⚠️ Incidente activo — este servicio está siendo atacado
+        </div>
+      )}
     </div>
   );
 }
@@ -113,7 +151,7 @@ const styles: Record<string, React.CSSProperties> = {
     width: 12,
     height: 12,
     borderRadius: "50%",
-    boxShadow: "0 0 8px currentColor",
+    transition: "all 0.3s ease",
   },
   name: {
     fontSize: "1.5rem",
@@ -165,6 +203,25 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: "0.75rem",
     color: "#FF4444",
     textAlign: "center",
+  },
+  errorLabel: {
+    fontSize: "0.65rem",
+    color: "rgba(255,68,68,0.6)",
+    textTransform: "uppercase",
+    letterSpacing: "0.1rem",
+    marginBottom: "0.2rem",
+  },
+  incidentBanner: {
+    marginTop: "0.75rem",
+    padding: "0.5rem",
+    background: "rgba(255,0,68,0.1)",
+    border: "1px solid rgba(255,0,68,0.3)",
+    borderRadius: "4px",
+    fontSize: "0.7rem",
+    color: "#FF0044",
+    textAlign: "center",
+    fontWeight: 700,
+    letterSpacing: "0.05rem",
   },
 };
 
